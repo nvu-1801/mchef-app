@@ -9,6 +9,9 @@ export default function SignInScreen() {
       <Link href="/(main)" asChild>
         <Button title="Go to Main" />
       </Link>
+      <Link href="/sign-up" asChild>
+        <Button title="Go to sign up" />
+      </Link>
     </View>
   );
 }
