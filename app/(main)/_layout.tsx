@@ -37,7 +37,7 @@ export default function MainTabs() {
             switch (route.name) {
               case "index":     return focused ? "home" : "home-outline";
               case "favorites": return focused ? "bookmark" : "bookmark-outline";
-              case "classes":   return focused ? "school" : "school-outline";
+              case "myrecipe":   return focused ? "school" : "school-outline";
               case "profile":   return focused ? "person" : "person-outline";
               default:          return "ellipse-outline";
             }
@@ -48,7 +48,7 @@ export default function MainTabs() {
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
       <Tabs.Screen name="favorites" options={{ title: "Favorites" }} />
-      <Tabs.Screen name="classes" options={{ title: "Classes" }} />
+      <Tabs.Screen name="myrecipe" options={{ title: "My Recipe" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
 
       {/*
