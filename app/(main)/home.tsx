@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Link } from 'expo-router';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
-import { useListDishesQuery } from '@/src/store/api/dishesApi';
+import { useListDishesQuery } from '@/src/api/dishesApi';
 import { useAppDispatch, useAppSelector } from '../../src/hooks/hooks';
 import { toggleFavorite } from '../../src/features/favorites/favoritesSlice';
 
@@ -215,7 +215,7 @@ export default function MainScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Spotlight this week</Text>
-          <Link href="/dishes" asChild>
+          <Link href="/recipe/dishes" asChild>
             <TouchableOpacity>
               <Text style={styles.linkText}>See all</Text>
             </TouchableOpacity>

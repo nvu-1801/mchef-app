@@ -1,14 +1,14 @@
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { RootState } from "../../storage/store";
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { RootState } from '../storage/store';
 
 // UI type sau khi map từ BE
 export type Dish = {
   id: string;
-  name: string;               // <-- từ BE.title
+  name: string; // <-- từ BE.title
   slug: string;
-  images: string[];           // <-- từ BE.cover_image_url
+  images: string[]; // <-- từ BE.cover_image_url
   description?: string;
-  diet?: "veg" | "nonveg" | string;
+  diet?: 'veg' | 'nonveg' | string;
   category?: { name: string; slug: string } | null;
   servings?: number;
   time_minutes?: number;
@@ -27,31 +27,32 @@ type DishBE = {
   time_minutes?: number;
 };
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:4000/api";
-const ASSET_BASE = process.env.EXPO_PUBLIC_ASSET_BASE ?? "http://10.0.2.2:4000";
+const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:4000/api';
+const ASSET_BASE = process.env.EXPO_PUBLIC_ASSET_BASE ?? 'http://10.0.2.2:4000';
 
 const toFullUrl = (p?: string) => {
-  if (!p) return "";
+  if (!p) return '';
   if (/^https?:\/\//i.test(p)) return p;
-  return `${ASSET_BASE}/${p.replace(/^\/+/, "")}`; // "dishes/xxx.jpg" -> http://.../dishes/xxx.jpg
+  return `${ASSET_BASE}/${p.replace(/^\/+/, '')}`; // "dishes/xxx.jpg" -> http://.../dishes/xxx.jpg
 };
 
 export const dishesApi = createApi({
-  reducerPath: "dishesApi",
+  reducerPath: 'dishesApi',
   baseQuery: fetchBaseQuery({
     baseUrl: API_BASE,
     prepareHeaders: (headers, { getState }) => {
       const token = (getState() as RootState).auth?.token;
-      if (token) headers.set("Authorization", `Bearer ${token}`);
+      if (token) headers.set('Authorization', `Bearer ${token}`);
       return headers;
     },
   }),
-  tagTypes: ["Dishes"],
+  tagTypes: ['Dishes'],
   endpoints: (b) => ({
     listDishes: b.query<Dish[], { q?: string } | void>({
-      query: (arg) => `/dishes${arg?.q ? `?q=${encodeURIComponent(arg.q)}` : ""}`,
+      query: (arg) =>
+        `/dishes${arg?.q ? `?q=${encodeURIComponent(arg.q)}` : ''}`,
       transformResponse: (resp: DishBE[] | { data: DishBE[] }) => {
-        const arr = Array.isArray(resp) ? resp : resp?.data ?? [];
+        const arr = Array.isArray(resp) ? resp : (resp?.data ?? []);
         return arr.map((d) => ({
           id: d.id,
           name: d.title,
@@ -64,7 +65,7 @@ export const dishesApi = createApi({
           time_minutes: d.time_minutes,
         }));
       },
-      providesTags: ["Dishes"],
+      providesTags: ['Dishes'],
     }),
     getDish: b.query<Dish, string>({
       query: (id) => `/dishes/${id}`,
@@ -82,7 +83,7 @@ export const dishesApi = createApi({
           time_minutes: d.time_minutes,
         };
       },
-      providesTags: (_r, _e, id) => [{ type: "Dishes" as const, id }],
+      providesTags: (_r, _e, id) => [{ type: 'Dishes' as const, id }],
     }),
   }),
 });
