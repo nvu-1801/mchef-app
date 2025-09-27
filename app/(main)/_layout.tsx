@@ -1,16 +1,4 @@
-// import { Stack } from "expo-router";
 
-// export default function MainLayout() {
-//   return (
-//     <Stack screenOptions={{ headerTitleAlign: "center" }}>
-//       <Stack.Screen name="index" options={{ title: "Home" }} />
-//       <Stack.Screen name="search" options={{ title: "Search" }} />
-//       <Stack.Screen name="bookmarks" options={{ title: "Bookmarks" }} />
-//       <Stack.Screen name="settings" options={{ title: "Settings" }} />
-//       {/* Nếu có nested folders như chef/, recipe/ thì thêm screen khi cần */}
-//     </Stack>
-//   );
-// }
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -35,7 +23,7 @@ export default function MainTabs() {
         tabBarIcon: ({ color, focused }) => {
           const name = (() => {
             switch (route.name) {
-              case "index":     return focused ? "home" : "home-outline";
+              case "home":     return focused ? "home" : "home-outline";
               case "favorites": return focused ? "bookmark" : "bookmark-outline";
               case "myrecipe":   return focused ? "school" : "school-outline";
               case "profile":   return focused ? "person" : "person-outline";
@@ -46,7 +34,7 @@ export default function MainTabs() {
         },
       })}
     >
-      <Tabs.Screen name="index" options={{ title: "Home" }} />
+      <Tabs.Screen name="home" options={{ title: "Home" }} />
       <Tabs.Screen name="favorites" options={{ title: "Favorites" }} />
       <Tabs.Screen name="myrecipe" options={{ title: "My Recipe" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />

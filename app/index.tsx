@@ -31,7 +31,7 @@ export default function OnboardingScreen() {
           Savor the Flavor, Master the Art. Discover delicious recipes with ease.
         </Text>
 
-        <Link href="/(main)" asChild>
+        <Link href="/(main)/home" asChild>
           <Pressable style={styles.primaryBtn}>
             <Text style={styles.primaryText}>Get Started</Text>
           </Pressable>
