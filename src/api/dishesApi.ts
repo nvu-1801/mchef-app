@@ -1,12 +1,12 @@
+// src/api/dishesApi.ts
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { RootState } from '../storage/store';
+import { getAuthToken } from '../auth/tokenBridge';
 
-// UI type sau khi map từ BE
 export type Dish = {
   id: string;
-  name: string; // <-- từ BE.title
+  name: string;
   slug: string;
-  images: string[]; // <-- từ BE.cover_image_url
+  images: string[];
   description?: string;
   diet?: 'veg' | 'nonveg' | string;
   category?: { name: string; slug: string } | null;
@@ -14,7 +14,6 @@ export type Dish = {
   time_minutes?: number;
 };
 
-// Raw từ BE
 type DishBE = {
   id: string;
   title: string;
@@ -33,15 +32,15 @@ const ASSET_BASE = process.env.EXPO_PUBLIC_ASSET_BASE ?? 'http://10.0.2.2:4000';
 const toFullUrl = (p?: string) => {
   if (!p) return '';
   if (/^https?:\/\//i.test(p)) return p;
-  return `${ASSET_BASE}/${p.replace(/^\/+/, '')}`; // "dishes/xxx.jpg" -> http://.../dishes/xxx.jpg
+  return `${ASSET_BASE}/${p.replace(/^\/+/, '')}`;
 };
 
 export const dishesApi = createApi({
   reducerPath: 'dishesApi',
   baseQuery: fetchBaseQuery({
     baseUrl: API_BASE,
-    prepareHeaders: (headers, { getState }) => {
-      const token = (getState() as RootState).auth?.token;
+    prepareHeaders: (headers) => {
+      const token = getAuthToken(); // lấy từ bridge, không cần Redux state
       if (token) headers.set('Authorization', `Bearer ${token}`);
       return headers;
     },

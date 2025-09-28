@@ -1,11 +1,19 @@
-import React from 'react';
+// app/(auth)/_layout.tsx
+import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
-import { store, persistor } from '../src/storage/store';
 import { ActivityIndicator } from 'react-native';
 
+import { store, persistor } from '../src/store/store';
+import { bootstrapAuthListener } from '../src/auth/bootstrapAuth';
+
 export default function AuthLayout() {
+  useEffect(() => {
+    const off = bootstrapAuthListener();
+    return () => off?.();
+  }, []);
+
   return (
     <Provider store={store}>
       <PersistGate loading={<ActivityIndicator />} persistor={persistor}>

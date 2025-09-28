@@ -13,6 +13,19 @@ import {
 } from "react-native";
 import { Link, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { supabaseNative } from "../../src/libs/supabase/supabase-native"; 
+import { supabaseEphemeral } from "../../src/libs/supabase/supabase-ephemeral"; 
+import { Alert } from "react-native";
+
+function humanize(message?: string) {
+  const m = (message || "").toLowerCase();
+  if (m.includes("invalid login credentials")) return "Sai email hoặc mật khẩu.";
+  if (m.includes("email not confirmed") || m.includes("not confirmed"))
+    return "Email chưa xác nhận. Vui lòng kiểm tra hộp thư.";
+  if (m.includes("email provider disabled")) return "Provider Email/Password đang bị tắt.";
+  if (m.includes("captcha")) return "Captcha đang bật. Tắt Captcha hoặc tích hợp hCaptcha.";
+  return message || "Có lỗi xảy ra.";
+}
 
 export default function SignInScreen() {
   const [email, setEmail] = React.useState("");
@@ -22,10 +35,25 @@ export default function SignInScreen() {
   const canSubmit = email.trim().length > 3 && password.length >= 6;
 
   const onSubmit = async () => {
-    // TODO: call your auth API here
-    // if (remember) -> lưu token/refresh vào AsyncStorage
-    router.replace("/(main)");
+    try {
+      const sb = remember ? supabaseNative : supabaseEphemeral;
+
+      const { data, error } = await sb.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw error;
+
+      // (Tuỳ chọn) gọi API BE giống web để đảm bảo profile/role:
+      // await fetch(`${API_BASE}/auth/ensure-admin`, { method: "POST", headers: { ... } }).catch(()=>{});
+
+      // Điều hướng như web
+      router.replace("/(main)/home");
+    } catch (err: any) {
+      Alert.alert("Đăng nhập thất bại", humanize(err?.message));
+    }
   };
+
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
