@@ -26,6 +26,7 @@ export default function MainTabs() {
               case "home":     return focused ? "home" : "home-outline";
               case "favorites": return focused ? "bookmark" : "bookmark-outline";
               case "myrecipe":   return focused ? "school" : "school-outline";
+              case "accounts": return focused ? "people" : "people-outline";
               case "profile":   return focused ? "person" : "person-outline";
               default:          return "ellipse-outline";
             }
@@ -37,12 +38,14 @@ export default function MainTabs() {
       <Tabs.Screen name="home" options={{ title: "Home" }} />
       <Tabs.Screen name="favorites" options={{ title: "Favorites" }} />
       <Tabs.Screen name="myrecipe" options={{ title: "My Recipe" }} />
+      <Tabs.Screen name="accounts/index" options={{ title: "Acc Chef" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
 
       {/*
         Nếu bạn có màn "search" trong (main) nhưng KHÔNG muốn hiển thị trên tab bar,
         khai báo để ẩn khỏi Tabs (vẫn điều hướng được bằng Link/router.push).
       */}
+      <Tabs.Screen name="recipe/dishes" options={{ href: null }} />
       <Tabs.Screen name="search" options={{ href: null }} />
     </Tabs>
   );

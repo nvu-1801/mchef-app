@@ -3,19 +3,18 @@ import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import { setupListeners } from '@reduxjs/toolkit/query';
 import { persistReducer, persistStore } from 'redux-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import favorites from '../features/favorites/favoritesSlice';
 import { dishesApi } from '../api/dishesApi';
 
 const rootReducer = combineReducers({
+  favorites, 
   [dishesApi.reducerPath]: dishesApi.reducer,
 });
 
 const persistConfig = {
   key: 'root',
   storage: AsyncStorage,
-  // whitelist rỗng vì hiện chưa có slice nào cần persist,
-  // nhưng để sẵn -> sau này chỉ cần thêm ['favorites', 'auth', ...]
-  whitelist: [],
+  whitelist: ['favorites'],
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
