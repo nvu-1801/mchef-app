@@ -29,7 +29,7 @@ export default function SignUp() {
 
   const onSubmit = async () => {
     // TODO: call your sign-up API here
-    router.replace("/(main)");
+    router.replace("/sign-in");
   };
 
   return (
