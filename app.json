@@ -3,13 +3,15 @@
     "name": "mchef-app",
     "slug": "mchef-app",
     "version": "1.0.0",
+    "scheme": "mchef",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
