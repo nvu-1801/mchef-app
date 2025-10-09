@@ -18,6 +18,7 @@ import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { useListDishesQuery } from '@/src/api/dishesApi';
 import { useAppDispatch, useAppSelector } from '../../src/hooks/hooks';
 import { toggleFavorite } from '../../src/features/favorites/favoritesSlice';
+import { FavoriteButton } from '../../src/components/common/FavoriteButton';
 
 type Feature = {
   id: string;
@@ -49,36 +50,6 @@ const FEATURED: Feature[] = [
     subtitle: 'Roasted veggies with miso-maple glaze',
     image:
       'https://images.unsplash.com/photo-1543353071-10c8ba85a904?w=900&h=700&fit=crop',
-  },
-];
-
-const SPOTLIGHT: Recipe[] = [
-  {
-    id: 's1',
-    title: 'Charred Corn Coconut Soup',
-    chef: 'Sophia Nguyen',
-    time: '35 min',
-    rating: 4.9,
-    image:
-      'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=900&h=700&fit=crop',
-  },
-  {
-    id: 's2',
-    title: 'Herbal Infusion Salad',
-    chef: 'Amelia Tran',
-    time: '20 min',
-    rating: 4.8,
-    image:
-      'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=900&h=700&fit=crop',
-  },
-  {
-    id: 's3',
-    title: 'Wild Mushroom Tartine',
-    chef: 'Theo Laurent',
-    time: '25 min',
-    rating: 4.7,
-    image:
-      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900&h=700&fit=crop',
   },
 ];
 
@@ -240,51 +211,71 @@ export default function MainScreen() {
           </TouchableOpacity>
         )}
 
-        {(spotlight.length ? spotlight : []).map((item) => (
-          <TouchableOpacity key={item.id} style={styles.recipeCard}>
-            <Image
-              source={{
-                uri:
-                  item.images?.[0] ??
-                  'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=900&h=700&fit=crop',
-              }}
-              style={styles.recipeImage}
-            />
-            <View style={styles.recipeBody}>
-              <Text style={styles.recipeTitle}>{item.name}</Text>
-              <Text style={styles.recipeChef}>
-                {item.category?.name ?? 'MChef'}
-              </Text>
+        {(spotlight?.length ? spotlight : []).map((item) => (
+          <Link
+            key={item.id}
+            href={{ pathname: '/recipe/[id]', params: { id: item.id } }}
+            asChild
+          >
+            <TouchableOpacity style={styles.recipeCard}>
+              <Image
+                source={{
+                  uri:
+                    item.images?.[0] ??
+                    'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=900&h=700&fit=crop',
+                }}
+                style={styles.recipeImage}
+              />
 
-              <View style={styles.recipeMetaRow}>
-                <View style={styles.recipeMetaItem}>
-                  <Ionicons name="time-outline" size={16} color="#98a1b3" />
-                  <Text style={styles.recipeMetaText}>
-                    {item.time_minutes ?? 30} min
-                  </Text>
-                </View>
+              <View style={styles.recipeBody}>
+                <Text style={styles.recipeTitle}>{item.name}</Text>
+                <Text style={styles.recipeChef}>
+                  {item.category?.name ?? 'MChef'}
+                </Text>
 
-                <View style={styles.recipeMetaItem}>
-                  <Ionicons
-                    name={
-                      item.diet === 'veg'
-                        ? 'leaf-outline'
-                        : 'restaurant-outline'
-                    }
-                    size={16}
-                    color="#98a1b3"
-                  />
-                  <Text style={styles.recipeMetaText}>
-                    {item.diet === 'veg' ? 'Veg' : 'Non-veg'}
-                  </Text>
+                <View style={styles.recipeMetaRow}>
+                  <View style={styles.recipeMetaItem}>
+                    <Ionicons name="time-outline" size={16} color="#98a1b3" />
+                    <Text style={styles.recipeMetaText}>
+                      {item.time_minutes ?? 30} min
+                    </Text>
+                  </View>
+
+                  <View style={styles.recipeMetaItem}>
+                    <Ionicons
+                      name={
+                        item.diet === 'veg'
+                          ? 'leaf-outline'
+                          : 'restaurant-outline'
+                      }
+                      size={16}
+                      color="#98a1b3"
+                    />
+                    <Text style={styles.recipeMetaText}>
+                      {item.diet === 'veg' ? 'Veg' : 'Non-veg'}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
 
-            <TouchableOpacity style={styles.recipeSaveBtn}>
-              <Feather name="bookmark" size={18} color="#2d9cdb" />
+              {/* Nút save riêng: chặn navigate khi bấm */}
+              <TouchableOpacity
+                style={styles.recipeSaveBtn}
+                onPress={(e) => {
+                  e.preventDefault();
+                  // ... dispatch lưu/ghim món nếu bạn muốn
+                }}
+              >
+                <Feather name="bookmark" size={18} color="#2d9cdb" />
+              </TouchableOpacity>
+              <FavoriteButton
+                dishId={item.id}
+                mode="icon"
+                stopNavigation 
+                style={styles.recipeSaveBtn} 
+              />
             </TouchableOpacity>
-          </TouchableOpacity>
+          </Link>
         ))}
 
         <View style={styles.sectionHeader}>
