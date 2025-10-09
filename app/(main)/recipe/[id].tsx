@@ -113,10 +113,6 @@ export default function DishDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: dish, isLoading, error, refetch } = useGetDishQuery(id!);
 
-  const dispatch = useAppDispatch();
-  const favs = useAppSelector((s) => s.favorites.items);
-  const isFav = dish ? favs.includes(dish.id) : false;
-
   // mở rộng theo JSON backend
   const tips = (dish as any)?.tips as string | undefined;
   const ratings = (dish as any)?.ratings as
@@ -196,25 +192,6 @@ export default function DishDetailScreen() {
         <Text style={{ fontWeight: '700', fontSize: 16 }}>Chi tiết công thức</Text>
 
         <View style={{ flex: 1 }} />
-
-        <Pressable
-          onPress={() => dispatch(toggleFavorite({ dishId: dish.id }))}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            borderWidth: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#fff',
-          }}
-        >
-          <Ionicons
-            name={isFav ? 'heart' : 'heart-outline'}
-            size={18}
-            color={isFav ? '#EF4444' : '#111827'}
-          />
-        </Pressable>
       </View>
 
       {/* Banner ảnh + overlay + title + chips */}
@@ -327,7 +304,7 @@ export default function DishDetailScreen() {
             justifyContent: 'space-between',
           }}
         >
-        <FavoriteButton dishId={dish.id} mode="action" />
+       <FavoriteButton dish={dish} mode="action" />
           <ActionBtn
             icon={<Feather name="star" size={16} color="#111827" />}
             label="Rate"

@@ -269,10 +269,10 @@ export default function MainScreen() {
                 <Feather name="bookmark" size={18} color="#2d9cdb" />
               </TouchableOpacity>
               <FavoriteButton
-                dishId={item.id}
+                dish={item}
                 mode="icon"
-                stopNavigation 
-                style={styles.recipeSaveBtn} 
+                stopNavigation
+                style={styles.recipeSaveBtn}
               />
             </TouchableOpacity>
           </Link>

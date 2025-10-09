@@ -35,9 +35,6 @@ export default function DishesScreen() {
     refetch,
   } = useListDishesQuery(submittedQ ? { q: submittedQ } : undefined);
 
-  const dispatch = useAppDispatch();
-  const favs = useAppSelector((s) => s.favorites.items);
-
   const sections: Section[] = React.useMemo(() => {
     if (!data?.length) return [];
     const byCat = new Map<string, Dish[]>();
@@ -175,7 +172,6 @@ export default function DishesScreen() {
         </View>
       )}
       renderItem={({ item }) => {
-        const isFav = favs.includes(item.id);
         const img = item.images?.[0];
 
         return (
@@ -232,28 +228,12 @@ export default function DishesScreen() {
                   </Text>
                 )}
               </View>
-
-              <Pressable
-                onPress={(e) => {
-                  e.preventDefault(); // không điều hướng khi bấm nút
-                  dispatch(toggleFavorite({ dishId: item.id }));
-                }}
-                style={{
-                  marginTop: 10,
-                  alignSelf: 'flex-start',
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                }}
-              >
-                <FavoriteButton
-                  dishId={item.id}
-                  mode="pill"
-                  stopNavigation
-                  style={{ marginTop: 10 }}
-                />
-              </Pressable>
+              <FavoriteButton
+                dish={item}
+                mode="pill"
+                stopNavigation // nếu button nằm trong card bọc <Link asChild>
+                style={{ marginTop: 10 }}
+              />
             </Pressable>
           </Link>
         );

@@ -1,38 +1,76 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+// src/features/favorites/favoritesSlice.ts
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-type FavoritesState = {
-  items: string[]; // lưu danh sách dishId đã favorite
+export type FavoriteEntry = {
+  id: string;
+  name?: string;
+  image?: string | null;
+  slug?: string;
+  categoryName?: string | null;
+  time_minutes?: number | null;
+  diet?: string | null;
 };
 
-const initialState: FavoritesState = { items: [] };
+type FavoritesState = {
+  order: string[];
+  entities: Record<string, FavoriteEntry>;
+  // @deprecated: items? để migrate
+  items?: string[];
+};
+
+const initialState: FavoritesState = { order: [], entities: {} };
 
 const favoritesSlice = createSlice({
-  name: "favorites",
+  name: 'favorites',
   initialState,
   reducers: {
-    addFavorite(s, a: PayloadAction<{ dishId: string }>) {
-      if (!s.items.includes(a.payload.dishId)) {
-        s.items.push(a.payload.dishId);
+    toggleFavorite(state, action: PayloadAction<FavoriteEntry>) {
+      const p = action.payload;
+      // ✅ guard state luôn có cấu trúc hợp lệ
+      if (!state.entities) state.entities = {};
+      if (!state.order) state.order = [];
+
+      // ✅ migrate từ state cũ (items: string[]) nếu còn
+      if (Array.isArray((state as any).items) && state.order.length === 0) {
+        const old = (state as any).items as string[];
+        state.order = [...old];
+        for (const id of old) {
+          if (!state.entities[id]) state.entities[id] = { id };
+        }
+        delete (state as any).items;
       }
-    },
-    removeFavorite(s, a: PayloadAction<{ dishId: string }>) {
-      s.items = s.items.filter((id) => id !== a.payload.dishId);
-    },
-    toggleFavorite(s, a: PayloadAction<{ dishId: string }>) {
-      const id = a.payload.dishId;
-      if (s.items.includes(id)) {
-        s.items = s.items.filter((d) => d !== id);
+
+      if (!p || !p.id) return;
+
+      if (state.entities[p.id]) {
+        delete state.entities[p.id];
+        state.order = state.order.filter((x) => x !== p.id);
       } else {
-        s.items.push(id);
+        state.entities[p.id] = p;
+        // tránh duplicate
+        state.order = [p.id, ...state.order.filter((x) => x !== p.id)];
       }
     },
-    clearFavorites(s) {
-      s.items = [];
+    clearFavorites(state) {
+      state.order = [];
+      state.entities = {};
     },
   },
 });
 
-export const { addFavorite, removeFavorite, toggleFavorite, clearFavorites } =
-  favoritesSlice.actions;
-
+export const { toggleFavorite, clearFavorites } = favoritesSlice.actions;
 export default favoritesSlice.reducer;
+
+// Selectors
+export const selectIsFav =
+  (id: string) =>
+  (s: any) =>
+    Boolean(s?.favorites?.entities && s.favorites.entities[id]);
+
+export const selectFavoriteEntries = (s: any) => {
+  const f = s?.favorites;
+  const order: string[] = Array.isArray(f?.order) ? f.order : [];
+  const ents: Record<string, FavoriteEntry> = f?.entities ?? {};
+  // lọc undefined phòng trường hợp lệch dữ liệu
+  return order.map((id) => ents[id]).filter(Boolean) as FavoriteEntry[];
+};

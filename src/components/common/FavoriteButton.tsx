@@ -1,44 +1,73 @@
+// src/components/common/FavoriteButton.tsx
 import React from 'react';
-import { Pressable, Text, View, GestureResponderEvent, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '@/src/hooks/hooks';
-import { toggleFavorite } from '@/src/features/favorites/favoritesSlice';
+import {
+  FavoriteEntry,
+  toggleFavorite,
+  selectIsFav,
+} from '@/src/features/favorites/favoritesSlice';
+import type { Dish } from '@/src/api/dishesApi';
+
+function toEntryFromDish(d: Dish): FavoriteEntry {
+  return {
+    id: d.id,
+    name: d.name,
+    image: d.images?.[0] ?? null,
+    slug: d.slug,
+    categoryName: d.category?.name ?? null,
+    time_minutes: d.time_minutes ?? null,
+    diet: (d.diet as string) ?? null,
+  };
+}
 
 type Mode = 'icon' | 'pill' | 'action';
 
 export function FavoriteButton({
-  dishId,
+  dish,
+  entry,
+  id,                  // ✅ fallback cuối cùng
   mode = 'pill',
-  stopNavigation = false,   // dùng true nếu button nằm trong <Link asChild>
+  stopNavigation = false,
   style,
+  iconSize = 18,
   labelOn = 'Saved',
   labelOff = 'Save',
-  iconSize = 18,
 }: {
-  dishId: string;
+  dish?: Dish;
+  entry?: FavoriteEntry;
+  id?: string;
   mode?: Mode;
   stopNavigation?: boolean;
   style?: ViewStyle;
+  iconSize?: number;
   labelOn?: string;
   labelOff?: string;
-  iconSize?: number;
 }) {
-  const dispatch = useAppDispatch();
-  const isFav = useAppSelector((s) => s.favorites.items.includes(dishId));
+  const snapshot: FavoriteEntry | undefined =
+    entry ?? (dish ? toEntryFromDish(dish) : id ? { id } : undefined);
 
-  const onPress = (e?: GestureResponderEvent) => {
-    if (stopNavigation && e?.preventDefault) e.preventDefault();
-    dispatch(toggleFavorite({ dishId }));
+  const favId = snapshot?.id ?? '';
+  const isFav = useAppSelector(selectIsFav(favId));
+  const dispatch = useAppDispatch();
+
+  const onPress = (e?: any) => {
+    if (stopNavigation && e?.preventDefault) e.preventDefault(); // RN web chỉ
+    if (!snapshot?.id) {
+      console.warn('[FavoriteButton] Missing snapshot/id – skip dispatch');
+      return;
+    }
+    dispatch(toggleFavorite(snapshot));
   };
+
+  const iconName = isFav ? 'bookmark' : 'bookmark-outline';
+  const iconColor = isFav ? '#2563EB' : '#111827';
 
   if (mode === 'icon') {
     return (
       <Pressable onPress={onPress} style={[styles.iconBtn, style]}>
-        <Ionicons
-          name={isFav ? 'bookmark' : 'bookmark-outline'}
-          size={iconSize}
-          color={isFav ? '#2563EB' : '#111827'}
-        />
+        <Ionicons name={iconName} size={iconSize} color={iconColor} />
       </Pressable>
     );
   }
@@ -46,25 +75,16 @@ export function FavoriteButton({
   if (mode === 'action') {
     return (
       <Pressable onPress={onPress} style={[styles.actionBtn, style]}>
-        <Ionicons
-          name={isFav ? 'bookmark' : 'bookmark-outline'}
-          size={iconSize}
-          color={'#111827'}
-        />
+        <Ionicons name={iconName} size={iconSize} color="#111827" />
         <Text style={styles.actionText}>{isFav ? labelOn : labelOff}</Text>
       </Pressable>
     );
   }
 
-  // mode === 'pill'
   return (
     <Pressable onPress={onPress} style={[styles.pillBtn, style]}>
-      <Ionicons
-        name={isFav ? 'bookmark' : 'bookmark-outline'}
-        size={iconSize}
-        color={isFav ? '#2563EB' : '#111827'}
-      />
-      <Text style={[styles.pillText, { color: isFav ? '#2563EB' : '#111827' }]}>
+      <Ionicons name={iconName} size={iconSize} color={iconColor} />
+      <Text style={[styles.pillText, { color: iconColor }]}>
         {isFav ? labelOn : labelOff}
       </Text>
     </Pressable>
@@ -79,16 +99,13 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#E5E7EB',
   },
   pillBtn: {
-    flexDirection: 'row', gap: 8,
-    alignItems: 'center', alignSelf: 'flex-start',
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+    flexDirection: 'row', gap: 8, alignItems: 'center',
+    alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#fff',
   },
   pillText: { fontWeight: '600' },
   actionBtn: {
-    flex: 1, flexDirection: 'row', gap: 8,
-    alignItems: 'center', justifyContent: 'center',
+    flex: 1, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center',
     paddingVertical: 10, borderRadius: 12,
   },
   actionText: { fontWeight: '600' },
