@@ -16,23 +16,12 @@ import {
 import { Link } from 'expo-router';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { useListDishesQuery } from '@/src/api/dishesApi';
-import { useAppDispatch, useAppSelector } from '../../src/hooks/hooks';
-import { toggleFavorite } from '../../src/features/favorites/favoritesSlice';
 import { FavoriteButton } from '../../src/components/common/FavoriteButton';
 
 type Feature = {
   id: string;
   title: string;
   subtitle: string;
-  image: string;
-};
-
-type Recipe = {
-  id: string;
-  title: string;
-  chef: string;
-  time: string;
-  rating: number;
   image: string;
 };
 
@@ -81,9 +70,9 @@ const WEEKLY_COLLECTION = [
 export default function MainScreen() {
   const { data = [], isLoading, error, refetch } = useListDishesQuery();
 
-  // pick 3 random dishes (ổn định trong vòng đời của data)
+  // pick 3 random dishes (stable during component lifetime)
   const spotlight = React.useMemo(() => {
-    if (!data?.length) return [];
+    if (!Array.isArray(data) || data.length === 0) return [];
     const arr = [...data];
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -257,17 +246,6 @@ export default function MainScreen() {
                   </View>
                 </View>
               </View>
-
-              {/* Nút save riêng: chặn navigate khi bấm */}
-              <TouchableOpacity
-                style={styles.recipeSaveBtn}
-                onPress={(e) => {
-                  e.preventDefault();
-                  // ... dispatch lưu/ghim món nếu bạn muốn
-                }}
-              >
-                <Feather name="bookmark" size={18} color="#2d9cdb" />
-              </TouchableOpacity>
               <FavoriteButton
                 dish={item}
                 mode="icon"

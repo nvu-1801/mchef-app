@@ -46,6 +46,9 @@ export default function MainTabs() {
         khai báo để ẩn khỏi Tabs (vẫn điều hướng được bằng Link/router.push).
       */}
       <Tabs.Screen name="recipe/dishes" options={{ href: null }} />
+      <Tabs.Screen name="recipe/[id]" options={{ href: null }} />
+      <Tabs.Screen name="chef/[id]" options={{ href: null }} />
+      <Tabs.Screen name="chef/index" options={{ href: null }} />
       <Tabs.Screen name="search" options={{ href: null }} />
     </Tabs>
   );
