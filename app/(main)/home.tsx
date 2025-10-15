@@ -1,12 +1,17 @@
 ﻿import React from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   ActivityIndicator,
   View,
   Text,
   StyleSheet,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { useListDishesQuery } from '@/src/api/dishesApi';
 import Header from '../../src/components/home/Header';
 import SearchBar from '../../src/components/home/SearchBar';
@@ -49,6 +54,7 @@ const WEEKLY_COLLECTION = [
 ];
 
 export default function MainScreen() {
+  const insets = useSafeAreaInsets();
   const { data = [], isLoading, error, refetch } = useListDishesQuery();
 
   // spotlight: first 3 dishes
@@ -57,10 +63,19 @@ export default function MainScreen() {
     [data],
   );
 
+  // fallback top inset for older Android if safe-area not available
+  const topInset =
+    insets.top ||
+    (Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0);
+  const bottomInset = insets.bottom ?? 0;
+
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { paddingTop: topInset }]}>
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[
+          styles.container,
+          { paddingBottom: 48 + bottomInset },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Header />
@@ -93,7 +108,7 @@ export default function MainScreen() {
 
         <CollectionsCarousel items={WEEKLY_COLLECTION} />
 
-        <View style={{ height: 88 }} />
+        <View style={{ height: 16 }} />
       </ScrollView>
     </SafeAreaView>
   );
