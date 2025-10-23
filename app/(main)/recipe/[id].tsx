@@ -8,15 +8,17 @@ import {
   View,
   Pressable,
   Share,
+  StyleSheet,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useGetDishQuery } from '@/src/api/dishesApi';
-import { useAppDispatch, useAppSelector } from '@/src/hooks/hooks';
-import { toggleFavorite } from '@/src/features/favorites/favoritesSlice';
-import  { FavoriteButton } from '@/src/components/common/FavoriteButton';
+import { FavoriteButton } from '@/src/components/common/FavoriteButton';
 
 function Chip({
   icon,
@@ -27,38 +29,38 @@ function Chip({
   label: string;
   tone?: 'primary' | 'success' | 'warning' | 'neutral';
 }) {
-  const palette: Record<string, { bg: string; text: string; border: string }> = {
-    primary: { bg: '#EEF2FF', text: '#3730A3', border: '#C7D2FE' },   // indigo
-    success: { bg: '#ECFDF5', text: '#065F46', border: '#A7F3D0' },   // emerald
-    warning: { bg: '#FFF7ED', text: '#9A3412', border: '#FED7AA' },   // orange
-    neutral: { bg: '#F5F5F5', text: '#374151', border: '#E5E7EB' },   // gray
-  };
+  const palette: Record<string, { bg: string; text: string; border: string }> =
+    {
+      primary: { bg: '#EEF2FF', text: '#3730A3', border: '#C7D2FE' },
+      success: { bg: '#ECFDF5', text: '#065F46', border: '#A7F3D0' },
+      warning: { bg: '#FFF7ED', text: '#9A3412', border: '#FED7AA' },
+      neutral: { bg: '#F5F5F5', text: '#374151', border: '#E5E7EB' },
+    };
   const c = palette[tone] ?? palette.primary;
 
   return (
     <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        backgroundColor: c.bg,
-        borderColor: c.border,
-        borderWidth: 1,
-        borderRadius: 999,
-      }}
+      style={[styles.chip, { backgroundColor: c.bg, borderColor: c.border }]}
     >
       {icon}
-      <Text style={{ color: c.text, fontWeight: '600' }}>{label}</Text>
+      <Text style={[styles.chipText, { color: c.text }]}>{label}</Text>
     </View>
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({
+  title,
+  icon,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+}) {
   return (
-    <View style={{ paddingHorizontal: 4, marginTop: 8, marginBottom: 8 }}>
-      <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{title}</Text>
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionTitleRow}>
+        {icon}
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
     </View>
   );
 }
@@ -86,436 +88,14 @@ function Card({
   };
 
   return (
-    <View
-      style={{
-        borderWidth: 1,
-        borderColor: borderByTone[tone],
-        borderRadius: 16,
-        backgroundColor: '#FFFFFF',
-        shadowColor: '#000',
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        elevation: 2,
-      }}
-    >
-      <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 6 }}>
-        <Text style={{ fontWeight: '800', color: headerColorByTone[tone], fontSize: 16 }}>
+    <View style={[styles.card, { borderColor: borderByTone[tone] }]}>
+      <View style={styles.cardHeader}>
+        <Text style={[styles.cardTitle, { color: headerColorByTone[tone] }]}>
           {title}
         </Text>
       </View>
-      <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>{children}</View>
+      <View style={styles.cardContent}>{children}</View>
     </View>
-  );
-}
-
-export default function DishDetailScreen() {
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: dish, isLoading, error, refetch } = useGetDishQuery(id!);
-
-  // mở rộng theo JSON backend
-  const tips = (dish as any)?.tips as string | undefined;
-  const ratings = (dish as any)?.ratings as
-    | { stars: number; comment?: string; user_id?: string; created_at?: string }[]
-    | undefined;
-  const ingredients = (dish as any)?.dish_ingredients as
-    | { name?: string; qty?: string; note?: string }[]
-    | undefined;
-  const steps = (dish as any)?.recipe_steps as
-    | { order?: number; content?: string; image_url?: string }[]
-    | undefined;
-  const creator = (dish as any)?.creator as
-    | { id: string; avatar_url?: string | null; display_name?: string | null }
-    | undefined;
-
-  // state tích chọn nguyên liệu
-  const [checkedIng, setCheckedIng] = React.useState<Record<number, boolean>>({});
-  const toggleIng = (idx: number) =>
-    setCheckedIng((s) => ({ ...s, [idx]: !s[idx] }));
-
-  // điểm trung bình
-  const avgStars =
-    Array.isArray(ratings) && ratings.length > 0
-      ? ratings.reduce((a, r) => a + (r.stars || 0), 0) / ratings.length
-      : 0;
-
-  if (isLoading) return <ActivityIndicator style={{ marginTop: 24 }} size="large" />;
-
-  if (error || !dish) {
-    return (
-      <View style={{ padding: 16 }}>
-        <Text style={{ marginBottom: 8 }}>Không tải được món ăn.</Text>
-        <Pressable
-          onPress={() => refetch()}
-          style={{
-            alignSelf: 'flex-start',
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 10,
-            borderWidth: 1,
-          }}
-        >
-          <Text>Thử lại</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  const cover = dish.images?.[0];
-
-  return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
-      {/* Top app bar (title) */}
-      <View
-        style={{
-          paddingHorizontal: 12,
-          paddingVertical: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            borderWidth: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#fff',
-          }}
-        >
-          <Ionicons name="arrow-back" size={18} />
-        </Pressable>
-        <Text style={{ fontWeight: '700', fontSize: 16 }}>Chi tiết công thức</Text>
-
-        <View style={{ flex: 1 }} />
-      </View>
-
-      {/* Banner ảnh + overlay + title + chips */}
-      <View style={{ position: 'relative' }}>
-        <Image
-          source={
-            cover
-              ? { uri: cover }
-              : { uri: 'https://picsum.photos/800/500?blur=3' }
-          }
-          style={{ width: '100%', height: 220 }}
-          resizeMode="cover"
-        />
-        <LinearGradient
-          colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.6)']}
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 140,
-          }}
-        />
-
-        <View style={{ position: 'absolute', left: 16, right: 16, bottom: 12 }}>
-          <Text
-            style={{
-              color: '#fff',
-              fontSize: 24,
-              fontWeight: '800',
-              textShadowColor: 'rgba(0,0,0,0.3)',
-              textShadowRadius: 8,
-            }}
-            numberOfLines={2}
-          >
-            {dish.name}
-          </Text>
-
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-            {!!dish.category?.name && (
-              <Chip
-                icon={<Ionicons name="pricetag" size={14} color="#3730A3" />}
-                label={dish.category.name}
-                tone="primary"
-              />
-            )}
-            {!!dish.diet && (
-              <Chip
-                icon={
-                  <Ionicons
-                    name={dish.diet === 'veg' ? 'leaf' : 'restaurant'}
-                    size={14}
-                    color={dish.diet === 'veg' ? '#065F46' : '#9A3412'}
-                  />
-                }
-                label={dish.diet === 'veg' ? 'Món chay' : 'Món mặn'}
-                tone={dish.diet === 'veg' ? 'success' : 'warning'}
-              />
-            )}
-          </View>
-        </View>
-      </View>
-
-      {/* Thẻ Chef + hàng action */}
-      <View style={{ paddingHorizontal: 16, marginTop: 14, gap: 12 }}>
-        {creator?.display_name ? (
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: '#E5E7EB',
-              borderRadius: 14,
-              backgroundColor: '#fff',
-              padding: 12,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 12,
-            }}
-          >
-            <Image
-              source={{
-                uri:
-                  creator.avatar_url ??
-                  'https://ui-avatars.com/api/?name=' +
-                    encodeURIComponent(creator.display_name || 'Chef'),
-              }}
-              style={{ width: 44, height: 44, borderRadius: 22 }}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700' }}>{creator.display_name}</Text>
-              <Pressable
-                onPress={() => {}}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}
-              >
-                <Feather name="user" size={14} color="#6B7280" />
-                <Text style={{ color: '#6B7280' }}>Xem hồ sơ</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
-        {/* Row hành động: Save / Rate / Comment / Share */}
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: '#E5E7EB',
-            borderRadius: 14,
-            backgroundColor: '#fff',
-            padding: 10,
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-          }}
-        >
-       <FavoriteButton dish={dish} mode="action" />
-          <ActionBtn
-            icon={<Feather name="star" size={16} color="#111827" />}
-            label="Rate"
-            onPress={() => {}}
-          />
-          <ActionBtn
-            icon={<Feather name="message-circle" size={16} color="#111827" />}
-            label="Comment"
-            onPress={() => {}}
-          />
-          <ActionBtn
-            icon={<Feather name="share-2" size={16} color="#111827" />}
-            label="Share"
-            onPress={() =>
-              Share.share({
-                message: `${dish.name} - ${dish.description ?? ''}`,
-              })
-            }
-          />
-        </View>
-
-        {/* Meta chips */}
-        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          {!!dish.time_minutes && (
-            <Chip
-              icon={<Ionicons name="time" size={14} color="#3730A3" />}
-              label={`⏱ ${dish.time_minutes} phút`}
-              tone="primary"
-            />
-          )}
-          {!!dish.servings && (
-            <Chip
-              icon={<Ionicons name="people" size={14} color="#374151" />}
-              label={`🍽 ${dish.servings} suất`}
-              tone="neutral"
-            />
-          )}
-        </View>
-
-        {/* Mô tả */}
-        {dish.description ? (
-          <Card title="Mô tả">
-            <Text style={{ lineHeight: 20, color: '#374151' }}>{dish.description}</Text>
-          </Card>
-        ) : null}
-
-        {/* Tips */}
-        {tips ? (
-          <Card title="Mẹo nấu (Tips)" tone="success">
-            <Text style={{ lineHeight: 20, color: '#065F46' }}>{tips}</Text>
-          </Card>
-        ) : null}
-
-        {/* Nguyên liệu với checkbox */}
-        {Array.isArray(ingredients) && ingredients.length > 0 ? (
-          <>
-            <SectionHeader title="Nguyên liệu" />
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: '#E5E7EB',
-                borderRadius: 14,
-                backgroundColor: '#fff',
-                paddingVertical: 6,
-              }}
-            >
-              {ingredients.map((ing, idx) => {
-                const checked = !!checkedIng[idx];
-                const line =
-                  (ing.name ?? 'Nguyên liệu') +
-                  (ing.qty ? ` – ${ing.qty}` : '') +
-                  (ing.note ? ` (${ing.note})` : '');
-                return (
-                  <Pressable
-                    key={idx}
-                    onPress={() => toggleIng(idx)}
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 12,
-                    }}
-                  >
-                    <Ionicons
-                      name={checked ? 'checkbox' : 'square-outline'}
-                      size={20}
-                      color={checked ? '#4F46E5' : '#9CA3AF'}
-                    />
-                    <Text
-                      style={{
-                        flex: 1,
-                        color: checked ? '#6B7280' : '#111827',
-                        textDecorationLine: checked ? 'line-through' : 'none',
-                      }}
-                    >
-                      {line}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </>
-        ) : null}
-
-        {/* Hướng dẫn (bước) */}
-        {Array.isArray(steps) && steps.length > 0 ? (
-          <>
-            <SectionHeader title="Hướng dẫn" />
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: '#E5E7EB',
-                borderRadius: 14,
-                backgroundColor: '#fff',
-                padding: 12,
-                gap: 12,
-              }}
-            >
-              {steps
-                .slice()
-                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                .map((st, idx) => (
-                  <View key={`${st.order ?? idx}-${idx}`} style={{ flexDirection: 'row', gap: 12 }}>
-                    <View
-                      style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: 13,
-                        backgroundColor: '#EEF2FF',
-                        borderWidth: 1,
-                        borderColor: '#C7D2FE',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginTop: 2,
-                      }}
-                    >
-                      <Text style={{ color: '#3730A3', fontWeight: '700' }}>
-                        {st.order ?? idx + 1}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, gap: 6 }}>
-                      {st.image_url ? (
-                        <Image
-                          source={{ uri: st.image_url }}
-                          style={{ width: '100%', height: 160, borderRadius: 10 }}
-                          resizeMode="cover"
-                        />
-                      ) : null}
-                      <Text style={{ color: '#374151', lineHeight: 20 }}>{st.content}</Text>
-                    </View>
-                  </View>
-                ))}
-            </View>
-          </>
-        ) : null}
-
-        {/* Đánh giá */}
-        {Array.isArray(ratings) && ratings.length > 0 ? (
-          <Card title="Đánh giá" tone="neutral">
-            <View style={{ gap: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontWeight: '800', fontSize: 18 }}>
-                  {avgStars.toFixed(1)} ★
-                </Text>
-                <Text style={{ color: '#6B7280' }}>({ratings.length} đánh giá)</Text>
-              </View>
-
-              {ratings.slice(0, 5).map((r, idx) => (
-                <View
-                  key={idx}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: '#E5E7EB',
-                    padding: 10,
-                    borderRadius: 12,
-                    backgroundColor: '#FFFFFF',
-                    gap: 4,
-                  }}
-                >
-                  <Text style={{ fontWeight: '700', color: '#111827' }}>
-                    {'⭐'.repeat(Math.max(1, Math.min(r.stars ?? 0, 5)))}
-                  </Text>
-                  {r.comment ? <Text style={{ color: '#374151' }}>{r.comment}</Text> : null}
-                  {r.created_at ? (
-                    <Text style={{ color: '#6B7280', fontSize: 12 }}>
-                      {new Date(r.created_at).toLocaleDateString('vi-VN')}
-                    </Text>
-                  ) : null}
-                </View>
-              ))}
-
-              <Pressable
-                onPress={() => {}}
-                style={{
-                  alignSelf: 'flex-start',
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                }}
-              >
-                <Text>Viết đánh giá</Text>
-              </Pressable>
-            </View>
-          </Card>
-        ) : null}
-
-        <View style={{ height: 12 }} />
-      </View>
-    </ScrollView>
   );
 }
 
@@ -529,20 +109,634 @@ function ActionBtn({
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        flex: 1,
-        flexDirection: 'row',
-        gap: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 10,
-        borderRadius: 12,
-      }}
-    >
+    <Pressable onPress={onPress} style={styles.actionBtn}>
       {icon}
-      <Text style={{ fontWeight: '600' }}>{label}</Text>
+      <Text style={styles.actionBtnText}>{label}</Text>
     </Pressable>
   );
 }
+
+type Rating = {
+  stars: number;
+  comment?: string;
+  user_id?: string;
+  created_at?: string;
+};
+
+type Ingredient = {
+  amount?: number;
+  note?: string;
+  ingredient?: string;
+};
+
+type RecipeStep = {
+  step_no?: number;
+  content?: string;
+  image_url?: string;
+};
+
+type Creator = {
+  id: string;
+  avatar_url?: string | null;
+  display_name?: string | null;
+};
+
+function isRatingArray(value: unknown): value is Rating[] {
+  return (
+    Array.isArray(value) &&
+    value.every((r) => typeof r === 'object' && r !== null && 'stars' in r)
+  );
+}
+
+function isIngredientArray(value: unknown): value is Ingredient[] {
+  return Array.isArray(value);
+}
+
+function isRecipeStepArray(value: unknown): value is RecipeStep[] {
+  return Array.isArray(value);
+}
+
+function isCreator(value: unknown): value is Creator {
+  return typeof value === 'object' && value !== null && 'id' in value;
+}
+
+export default function DishDetailScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { data: dish, isLoading, error, refetch } = useGetDishQuery(id!);
+
+  // Extract and type-guard fields from API response
+  const dishData = dish as unknown;
+  console.log(dishData)
+
+  const tips =
+    typeof dishData === 'object' && dishData !== null && 'tips' in dishData
+      ? (dishData.tips as string | undefined)
+      : undefined;
+
+  const ratingsRaw =
+    typeof dishData === 'object' && dishData !== null && 'ratings' in dishData
+      ? dishData.ratings
+      : undefined;
+  const ratings = isRatingArray(ratingsRaw) ? ratingsRaw : undefined;
+
+  const ingredientsRaw =
+    typeof dishData === 'object' &&
+    dishData !== null &&
+    'dish_ingredients' in dishData
+      ? dishData.dish_ingredients
+      : undefined;
+  const ingredients = isIngredientArray(ingredientsRaw)
+    ? ingredientsRaw
+    : undefined;
+
+  const stepsRaw =
+    typeof dishData === 'object' &&
+    dishData !== null &&
+    'recipe_steps' in dishData
+      ? dishData.recipe_steps
+      : undefined;
+  const steps = isRecipeStepArray(stepsRaw) ? stepsRaw : undefined;
+
+  const creatorRaw =
+    typeof dishData === 'object' && dishData !== null && 'creator' in dishData
+      ? dishData.creator
+      : undefined;
+  const creator = isCreator(creatorRaw) ? creatorRaw : undefined;
+
+  // Ingredient checklist state
+  const [checkedIng, setCheckedIng] = React.useState<Record<number, boolean>>(
+    {},
+  );
+  const toggleIng = (idx: number) =>
+    setCheckedIng((s) => ({ ...s, [idx]: !s[idx] }));
+
+  // Average rating
+  const avgStars =
+    Array.isArray(ratings) && ratings.length > 0
+      ? ratings.reduce((a, r) => a + (r.stars || 0), 0) / ratings.length
+      : 0;
+
+  if (isLoading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
+
+  if (error || !dish) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={32} color="#dc2626" />
+        <Text style={styles.errorTitle}>Không thể tải công thức</Text>
+        <Text style={styles.errorSub}>
+          Vui lòng kiểm tra kết nối và thử lại
+        </Text>
+        <Pressable style={styles.retryBtn} onPress={() => refetch()}>
+          <Text style={styles.retryBtnText}>Thử lại</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const cover = dish.images?.[0];
+
+  return (
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        { paddingBottom: insets.bottom + 28 },
+      ]}
+    >
+      {/* Header bar */}
+      <View style={[styles.headerBar, { paddingTop: insets.top + 8 }]}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={20} color="#111827" />
+        </Pressable>
+        <Text style={styles.headerBarTitle}>Chi tiết công thức</Text>
+        <View style={{ width: 36 }} />
+      </View>
+
+      {/* Hero image + gradient overlay + title + badges */}
+      <View style={styles.heroSection}>
+        <Image
+          source={
+            cover
+              ? { uri: cover }
+              : { uri: 'https://picsum.photos/800/500?blur=3' }
+          }
+          style={styles.heroImage}
+          resizeMode="cover"
+        />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.65)']}
+          style={styles.heroGradient}
+        />
+
+        <View style={styles.heroContent}>
+          <Text style={styles.heroTitle} numberOfLines={3}>
+            {dish.name}
+          </Text>
+
+          <View style={styles.heroBadges}>
+            {!!dish.category?.name && (
+              <Chip
+                icon={<Ionicons name="pricetag" size={14} color="#3730A3" />}
+                label={dish.category.name}
+                tone="primary"
+              />
+            )}
+            {!!dish.diet && (
+              <Chip
+                icon={
+                  <MaterialCommunityIcons
+                    name={dish.diet === 'veg' ? 'leaf' : 'food-drumstick'}
+                    size={14}
+                    color={dish.diet === 'veg' ? '#065F46' : '#9A3412'}
+                  />
+                }
+                label={dish.diet === 'veg' ? 'Chay' : 'Mặn'}
+                tone={dish.diet === 'veg' ? 'success' : 'warning'}
+              />
+            )}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.bodyPadding}>
+        {/* Meta badges: time + servings + rating */}
+        <View style={styles.metaChips}>
+          {!!dish.time_minutes && (
+            <Chip
+              icon={<Ionicons name="time" size={14} color="#3730A3" />}
+              label={`${dish.time_minutes} phút`}
+              tone="primary"
+            />
+          )}
+          {!!dish.servings && (
+            <Chip
+              icon={<Ionicons name="people" size={14} color="#374151" />}
+              label={`${dish.servings} suất`}
+              tone="neutral"
+            />
+          )}
+          {avgStars > 0 && (
+            <Chip
+              icon={<Ionicons name="star" size={14} color="#f59e0b" />}
+              label={`${avgStars.toFixed(1)} (${ratings?.length ?? 0})`}
+              tone="warning"
+            />
+          )}
+        </View>
+
+        {/* Creator card */}
+        {creator?.display_name ? (
+          <View style={styles.creatorCard}>
+            <Image
+              source={{
+                uri:
+                  creator.avatar_url ??
+                  `https://ui-avatars.com/api/?name=${encodeURIComponent(creator.display_name || 'Chef')}&background=2563EB&color=fff`,
+              }}
+              style={styles.creatorAvatar}
+            />
+            <View style={styles.creatorInfo}>
+              <Text style={styles.creatorName}>{creator.display_name}</Text>
+              <Text style={styles.creatorRole}>Đầu bếp</Text>
+            </View>
+            <Pressable style={styles.creatorFollowBtn}>
+              <Ionicons name="add-circle-outline" size={20} color="#2563EB" />
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Action buttons */}
+        <View style={styles.actionRow}>
+          <FavoriteButton dish={dish} mode="action" />
+          <ActionBtn
+            icon={<Feather name="star" size={16} color="#111827" />}
+            label="Đánh giá"
+            onPress={() => {}}
+          />
+          <ActionBtn
+            icon={<Feather name="message-circle" size={16} color="#111827" />}
+            label="Bình luận"
+            onPress={() => {}}
+          />
+          <ActionBtn
+            icon={<Feather name="share-2" size={16} color="#111827" />}
+            label="Chia sẻ"
+            onPress={() =>
+              Share.share({
+                message: `${dish.name} - ${dish.description ?? ''}\n\nXem công thức trên MChef`,
+              })
+            }
+          />
+        </View>
+
+        {/* Description */}
+        {dish.description ? (
+          <Card title="Mô tả">
+            <Text style={styles.descText}>{dish.description}</Text>
+          </Card>
+        ) : null}
+
+        {/* Tips */}
+        {tips ? (
+          <Card title="💡 Mẹo nấu ăn" tone="success">
+            <Text style={styles.tipsText}>{tips}</Text>
+          </Card>
+        ) : null}
+
+        {/* Ingredients */}
+        {Array.isArray(ingredients) && ingredients.length > 0 ? (
+          <>
+            <SectionHeader
+              title="Nguyên liệu"
+              icon={<Ionicons name="basket" size={18} color="#3730A3" />}
+            />
+            <View style={styles.ingredientsList}>
+              {ingredients.map((ing, idx) => {
+                const checked = !!checkedIng[idx];
+                const line =
+                  (ing.ingredient ?? 'Nguyên liệu') +
+                  (ing.amount
+                    ? ` – ${ing.amount}${ing.note ? ' ' + ing.note : ''}`
+                    : '');
+
+                return (
+                  <Pressable
+                    key={idx}
+                    onPress={() => toggleIng(idx)}
+                    style={[
+                      styles.ingredientItem,
+                      checked && styles.ingredientItemChecked,
+                    ]}
+                  >
+                    <Ionicons
+                      name={checked ? 'checkbox' : 'square-outline'}
+                      size={20}
+                      color={checked ? '#2563EB' : '#9CA3AF'}
+                    />
+                    <Text
+                      style={[
+                        styles.ingredientText,
+                        checked && styles.ingredientTextChecked,
+                      ]}
+                    >
+                      {line}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
+        {/* Steps */}
+        {Array.isArray(steps) && steps.length > 0 ? (
+          <>
+            <SectionHeader
+              title="Hướng dẫn thực hiện"
+              icon={<Ionicons name="list-circle" size={18} color="#3730A3" />}
+            />
+            <View style={styles.stepsContainer}>
+              {steps
+                .slice()
+                .sort((a, b) => (a.step_no ?? 0) - (b.step_no ?? 0))
+                .map((st, idx) => (
+                  <View
+                    key={`${st.step_no ?? idx}-${idx}`}
+                    style={styles.stepRow}
+                  >
+                    <View style={styles.stepNumber}>
+                      <Text style={styles.stepNumberText}>
+                        {st.step_no ?? idx + 1}
+                      </Text>
+                    </View>
+                    <View style={styles.stepContent}>
+                      {st.image_url ? (
+                        <Image
+                          source={{ uri: st.image_url }}
+                          style={styles.stepImage}
+                          resizeMode="cover"
+                        />
+                      ) : null}
+                      <Text style={styles.stepText}>{st.content}</Text>
+                    </View>
+                  </View>
+                ))}
+            </View>
+          </>
+        ) : null}
+
+        {/* Ratings */}
+        {Array.isArray(ratings) && ratings.length > 0 ? (
+          <>
+            <SectionHeader
+              title="Đánh giá từ người dùng"
+              icon={<Ionicons name="star" size={18} color="#f59e0b" />}
+            />
+            <Card
+              title={`${avgStars.toFixed(1)} ⭐ (${ratings.length} đánh giá)`}
+              tone="neutral"
+            >
+              <View style={styles.ratingsContainer}>
+                {ratings.slice(0, 5).map((r, idx) => (
+                  <View key={idx} style={styles.ratingItem}>
+                    <View style={styles.ratingHeader}>
+                      <Text style={styles.ratingStars}>
+                        {'⭐'.repeat(Math.max(1, Math.min(r.stars ?? 0, 5)))}
+                      </Text>
+                      {r.created_at && (
+                        <Text style={styles.ratingDate}>
+                          {new Date(r.created_at).toLocaleDateString('vi-VN')}
+                        </Text>
+                      )}
+                    </View>
+                    {r.comment && (
+                      <Text style={styles.ratingComment}>{r.comment}</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+              <Pressable style={styles.writeReviewBtn}>
+                <Ionicons name="create-outline" size={16} color="#2563EB" />
+                <Text style={styles.writeReviewBtnText}>
+                  Viết đánh giá của bạn
+                </Text>
+              </Pressable>
+            </Card>
+          </>
+        ) : null}
+
+        <View style={{ height: 12 }} />
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { backgroundColor: '#f9fafb' },
+  centerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 12,
+    color: '#111827',
+  },
+  errorSub: { color: '#6b7280', marginTop: 6, textAlign: 'center' },
+  retryBtn: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
+  },
+  retryBtnText: { color: '#fff', fontWeight: '700' },
+
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  headerBarTitle: { fontWeight: '700', fontSize: 16, color: '#111827' },
+
+  heroSection: { position: 'relative', marginBottom: 16 },
+  heroImage: { width: '100%', height: 240 },
+  heroGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 160,
+  },
+  heroContent: { position: 'absolute', left: 16, right: 16, bottom: 12 },
+  heroTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '800',
+    lineHeight: 28,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowRadius: 8,
+    marginBottom: 12,
+  },
+  heroBadges: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+
+  bodyPadding: { paddingHorizontal: 16 },
+
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+  },
+  chipText: { fontWeight: '700', fontSize: 12 },
+
+  metaChips: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+
+  creatorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  creatorAvatar: { width: 44, height: 44, borderRadius: 22 },
+  creatorInfo: { flex: 1, marginLeft: 12 },
+  creatorName: { fontWeight: '700', color: '#111827' },
+  creatorRole: { color: '#6b7280', fontSize: 12, marginTop: 2 },
+  creatorFollowBtn: { padding: 6 },
+
+  actionRow: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+  },
+  actionBtnText: { fontWeight: '600', fontSize: 12, color: '#111827' },
+
+  card: {
+    borderWidth: 1,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  cardHeader: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 6 },
+  cardTitle: { fontWeight: '800', fontSize: 16 },
+  cardContent: { paddingHorizontal: 14, paddingBottom: 14 },
+
+  descText: { lineHeight: 20, color: '#374151' },
+  tipsText: { lineHeight: 20, color: '#065f46', fontWeight: '500' },
+
+  sectionHeader: { paddingHorizontal: 4, marginTop: 16, marginBottom: 10 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
+
+  ingredientsList: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  ingredientItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  ingredientItemChecked: { backgroundColor: '#f9fafb' },
+  ingredientText: { flex: 1, color: '#111827' },
+  ingredientTextChecked: {
+    color: '#9ca3af',
+    textDecorationLine: 'line-through',
+  },
+
+  stepsContainer: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    padding: 12,
+    marginBottom: 12,
+    gap: 16,
+  },
+  stepRow: { flexDirection: 'row', gap: 12 },
+  stepNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#eef2ff',
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  stepNumberText: { color: '#3730a3', fontWeight: '700', fontSize: 12 },
+  stepContent: { flex: 1, gap: 8 },
+  stepImage: { width: '100%', height: 160, borderRadius: 10 },
+  stepText: { color: '#374151', lineHeight: 20 },
+
+  ratingsContainer: { gap: 10, marginBottom: 12 },
+  ratingItem: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+  },
+  ratingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  ratingStars: { fontWeight: '700' },
+  ratingDate: { color: '#9ca3af', fontSize: 12 },
+  ratingComment: { marginTop: 6, color: '#374151', lineHeight: 18 },
+
+  writeReviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2563EB',
+  },
+  writeReviewBtnText: { color: '#2563EB', fontWeight: '700' },
+});

@@ -11,6 +11,7 @@ export type Dish = {
   category?: { id?: string; name: string; slug: string } | null;
   servings?: number;
   time_minutes?: number;
+  created_by?: string; // Add this field
 };
 
 type DishBE = {
@@ -23,6 +24,9 @@ type DishBE = {
   category?: { id?: string; name: string; slug: string } | null;
   servings?: number;
   time_minutes?: number;
+  created_by?: string; // Add this field
+  creator_id?: string; // Possible alternative field name
+  user_id?: string; // Possible alternative field name
 };
 
 const DEBUG = process.env.EXPO_PUBLIC_DEBUG === 'true';
@@ -93,7 +97,21 @@ const mapDish = (d: DishBE): Dish => ({
   category: d.category ?? null,
   servings: d.servings,
   time_minutes: d.time_minutes,
+  created_by: d.created_by ?? d.creator_id ?? d.user_id, // Map creator field
 });
+
+export type DishInput = {
+  title: string;
+  description?: string;
+  cover_image_url?: string;
+  diet?: 'veg' | 'nonveg' | string;
+  category_id?: string;
+  servings?: number;
+  time_minutes?: number;
+  ingredients?: string[];
+  instructions?: string[];
+  status?: 'draft' | 'published';
+};
 
 export const dishesApi = createApi({
   reducerPath: 'dishesApi',
@@ -118,6 +136,13 @@ export const dishesApi = createApi({
           console.log('[DishesApi] listDishes →', mapped.length, 'items');
         return mapped;
       },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((d) => ({ type: 'Dishes' as const, id: d.id })),
+              { type: 'Dishes' as const, id: 'LIST' },
+            ]
+          : [{ type: 'Dishes' as const, id: 'LIST' }],
     }),
     getDish: b.query<Dish, string>({
       query: (id) => `/dishes/${id}`,
@@ -126,6 +151,7 @@ export const dishesApi = createApi({
         if (!d) throw new Error('Dish not found');
         return mapDish(d);
       },
+      providesTags: (_result, _error, id) => [{ type: 'Dishes' as const, id }],
     }),
     getHome: b.query<any, void>({
       query: () => '/home',
@@ -134,8 +160,56 @@ export const dishesApi = createApi({
         return resp;
       },
     }),
+    // Create new dish
+    createDish: b.mutation<Dish, DishInput>({
+      query: (body) => ({
+        url: '/dishes',
+        method: 'POST',
+        body,
+      }),
+      transformResponse: (resp: unknown) => {
+        const d = unwrapOne(resp);
+        if (!d) throw new Error('Failed to create dish');
+        return mapDish(d);
+      },
+      invalidatesTags: [{ type: 'Dishes', id: 'LIST' }],
+    }),
+    // Update existing dish
+    updateDish: b.mutation<Dish, { id: string; data: Partial<DishInput> }>({
+      query: ({ id, data }) => ({
+        url: `/dishes/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      transformResponse: (resp: unknown) => {
+        const d = unwrapOne(resp);
+        if (!d) throw new Error('Failed to update dish');
+        return mapDish(d);
+      },
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'Dishes', id },
+        { type: 'Dishes', id: 'LIST' },
+      ],
+    }),
+    // Delete dish
+    deleteDish: b.mutation<void, string>({
+      query: (id) => ({
+        url: `/dishes/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'Dishes' as const, id },
+        { type: 'Dishes' as const, id: 'LIST' },
+      ],
+    }),
   }),
 });
 
-export const { useListDishesQuery, useGetDishQuery, useGetHomeQuery } =
-  dishesApi;
+export const {
+  useListDishesQuery,
+  useGetDishQuery,
+  useGetHomeQuery,
+  useCreateDishMutation,
+  useUpdateDishMutation,
+  useDeleteDishMutation,
+} = dishesApi;
