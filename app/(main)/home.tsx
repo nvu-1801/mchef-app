@@ -19,7 +19,7 @@ import { Link, useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useListDishesQuery } from '@/src/api/dishesApi';
-import type { Dish } from '@/src/api/dishesApi';
+import type { Dish } from '@/src/types/dish';
 
 const CATEGORIES = [
   { id: 'all', name: 'All', icon: 'apps', color: '#2563EB' },

@@ -21,7 +21,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { useListDishesQuery } from '@/src/api/dishesApi';
 import { FavoriteButton } from '@/src/components/common/FavoriteButton';
-import type { Dish } from '@/src/api/dishesApi';
+import type { Dish } from '@/src/types/dish';
 
 type Section = { title: string; data: Dish[] };
 
