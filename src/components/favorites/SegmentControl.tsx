@@ -1,82 +1,89 @@
 import React from 'react';
-import {
-  View,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  Animated,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+type Segment = {
+  id: string;
+  label: string;
+};
+
+type Props = {
+  segments: readonly Segment[];
+  activeIndex: number;
+  onChange: (index: number) => void;
+};
 
 export default function SegmentControl({
   segments,
   activeIndex,
   onChange,
-}: {
-  segments: { id: string; label: string }[];
-  activeIndex: number;
-  onChange: (index: number) => void;
-}) {
-  const indX = React.useRef(new Animated.Value(activeIndex)).current;
-
-  React.useEffect(() => {
-    Animated.spring(indX, {
-      toValue: activeIndex,
-      bounciness: 8,
-      useNativeDriver: false,
-    }).start();
-  }, [activeIndex, indX]);
-
+}: Props) {
   return (
-    <View style={styles.wrap}>
-      <View style={styles.track}>
-        <Animated.View
-          style={[
-            styles.indicator,
-            {
-              left: indX.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['2%', '50.5%'],
-              }),
-            },
-          ]}
-        />
-        {segments.map((s, i) => (
-          <TouchableOpacity
-            key={s.id}
-            style={styles.btn}
-            onPress={() => onChange(i)}
-          >
-            <Text style={[styles.text, activeIndex === i && styles.textActive]}>
-              {s.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+    <View style={styles.container}>
+      {segments.map((seg, idx) => (
+        <TouchableOpacity
+          key={seg.id}
+          style={[styles.segment, idx === activeIndex && styles.segmentActive]}
+          onPress={() => onChange(idx)}
+          activeOpacity={0.7}
+        >
+          {idx === activeIndex ? (
+            <LinearGradient
+              colors={['#16a34a', '#15803d']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.gradient}
+            >
+              <Text style={styles.textActive}>{seg.label}</Text>
+            </LinearGradient>
+          ) : (
+            <Text style={styles.text}>{seg.label}</Text>
+          )}
+        </TouchableOpacity>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 20, marginTop: 8 },
-  track: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e6edf6',
+  container: {
     flexDirection: 'row',
-    position: 'relative',
-    padding: 2,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  indicator: {
-    position: 'absolute',
-    top: 2,
-    width: '47.5%',
-    height: '92%',
-    backgroundColor: '#2563EB',
-    borderRadius: 14,
-    zIndex: 0,
+  segment: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  btn: { width: '50%', paddingVertical: 10, alignItems: 'center', zIndex: 1 },
-  text: { color: '#52606d', fontWeight: '700' },
-  textActive: { color: '#fff' },
+  segmentActive: {
+    overflow: 'hidden',
+  },
+  gradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  text: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  textActive: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
 });

@@ -6,6 +6,8 @@ import {
   Platform,
   StatusBar,
   Share,
+  StyleSheet,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSelector } from '@/src/hooks/hooks';
@@ -58,19 +60,23 @@ export default function FavoritesScreen() {
   };
 
   return (
-    <SafeAreaView
-      style={[{ flex: 1, backgroundColor: '#f7fbff', paddingTop: topInset }]}
-    >
+    <SafeAreaView style={[styles.safe, { paddingTop: topInset }]}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 32 + bottomInset }}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: 32 + bottomInset },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <FavoritesHeader count={favorites.length} />
-        <SegmentControl
-          segments={SEGMENTS as any}
-          activeIndex={activeSegment}
-          onChange={(i) => setActiveSegment(i)}
-        />
+
+        <View style={styles.segmentWrapper}>
+          <SegmentControl
+            segments={SEGMENTS as any}
+            activeIndex={activeSegment}
+            onChange={(i) => setActiveSegment(i)}
+          />
+        </View>
 
         {SEGMENTS[activeSegment].id === 'favorites' && (
           <>
@@ -79,13 +85,19 @@ export default function FavoritesScreen() {
               active={activeCategory}
               onSelect={setActiveCategory}
             />
-            {filteredFavorites.length > 0 ? (
-              filteredFavorites.map((f) => (
-                <FavoriteRecipeCard key={f.id} item={f} onShare={handleShare} />
-              ))
-            ) : (
-              <EmptyFavorites />
-            )}
+            <View style={styles.cardList}>
+              {filteredFavorites.length > 0 ? (
+                filteredFavorites.map((f) => (
+                  <FavoriteRecipeCard
+                    key={f.id}
+                    item={f}
+                    onShare={handleShare}
+                  />
+                ))
+              ) : (
+                <EmptyFavorites />
+              )}
+            </View>
           </>
         )}
 
@@ -127,3 +139,20 @@ export default function FavoritesScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#f0fdf4',
+  },
+  scroll: {
+    paddingHorizontal: 0,
+  },
+  segmentWrapper: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  cardList: {
+    paddingHorizontal: 16,
+  },
+});

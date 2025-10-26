@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#2d8c4dff',
   },
   btnText: { color: '#fff', fontWeight: '700' },
 });

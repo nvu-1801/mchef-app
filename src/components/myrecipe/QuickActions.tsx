@@ -14,8 +14,8 @@ type Action = {
 };
 
 const ACTIONS: Action[] = [
-  { id: '1', label: 'New recipe', icon: 'plus', route: '/(main)/chef/new' },
-  { id: '2', label: 'All recipes', icon: 'list', route: '/(main)/chef' },
+  { id: '1', label: 'New recipe', icon: 'plus', route: '/(auth)/sign-in' },
+  { id: '2', label: 'All recipes', icon: 'list', route: '/(main)/recipe/dishes' },
   { id: '3', label: 'Settings', icon: 'settings', route: '/settings' },
 ];
 

@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabaseNative } from '@/src/libs/supabase/supabase-native';
+import { useAuth } from '@/src/hooks/useAuth';
 
 type RawMe = Record<string, unknown>;
 
@@ -45,8 +46,10 @@ type NormalizedMe = {
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user, token, loading: authLoading, isAuthenticated } = useAuth();
+
   const [me, setMe] = React.useState<NormalizedMe | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = React.useState(false);
 
   const normalize = (raw: RawMe): NormalizedMe => {
     const name =
@@ -103,36 +106,24 @@ export default function Profile() {
     };
   };
 
+  // Fetch profile data when authenticated
   React.useEffect(() => {
+    if (!isAuthenticated || !token) {
+      console.log('[Profile] Not authenticated, skipping fetch');
+      return;
+    }
+
     let mounted = true;
+
     (async () => {
       setLoading(true);
       try {
-        // Get session from Supabase
-        const { data: sessionData, error: sessionError } =
-          await supabaseNative.auth.getSession();
+        console.log('[Profile] Fetching profile with token');
 
-        console.log(
-          '[Profile] Session:',
-          sessionData?.session ? 'exists' : 'null',
-        );
-
-        if (sessionError || !sessionData?.session) {
-          console.log('[Profile] No session found, redirecting to login');
-          if (mounted) {
-            setLoading(false);
-            router.replace('/(auth)/sign-in');
-          }
-          return;
-        }
-
-        const token = sessionData.session.access_token;
-        console.log('[Profile] Token from session:', token ? 'exists' : 'null');
-
-        const headers: Record<string, string> = { Accept: 'application/json' };
-        if (token) headers.Authorization = `Bearer ${token}`;
-
-        console.log('[Profile] Calling /api/me...');
+        const headers: Record<string, string> = {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        };
 
         const res = await fetch('https://mchef-be-m168.vercel.app/api/me', {
           headers,
@@ -143,7 +134,7 @@ export default function Profile() {
         if (!mounted) return;
 
         if (res.status === 401) {
-          console.log('[Profile] Token expired/invalid, clearing session');
+          console.log('[Profile] Token expired, signing out');
           await supabaseNative.auth.signOut();
           router.replace('/(auth)/sign-in');
           return;
@@ -166,16 +157,17 @@ export default function Profile() {
           }
         }
       } catch (e) {
-        console.log('[Profile] Error:', e);
+        console.error('[Profile] Error:', e);
         setMe(null);
       } finally {
         if (mounted) setLoading(false);
       }
     })();
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isAuthenticated, token]);
 
   const signOut = React.useCallback(async () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
@@ -191,17 +183,53 @@ export default function Profile() {
     ]);
   }, [router]);
 
-  if (loading) {
+  // Show loading while checking auth
+  if (authLoading) {
     return (
       <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]}>
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#16a34a" />
+          <Text style={styles.loadingText}>Checking authentication...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const name = me?.name ?? 'Chef';
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]}>
+        <View style={styles.center}>
+          <View style={styles.authIcon}>
+            <Feather name="lock" size={48} color="#16a34a" />
+          </View>
+          <Text style={styles.authTitle}>Login Required</Text>
+          <Text style={styles.authHint}>Please login to view your profile</Text>
+          <TouchableOpacity
+            style={styles.loginBtn}
+            onPress={() => router.push('/(auth)/sign-in')}
+          >
+            <Feather name="log-in" size={18} color="#fff" />
+            <Text style={styles.loginText}>Go to Login</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show loading while fetching profile
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#16a34a" />
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const name = me?.name ?? user?.email?.split('@')[0] ?? 'Chef';
   const avatar =
     me?.avatar ??
     `https://i.pinimg.com/1200x/f5/51/48/f55148ad2ef92de8597008b60bcd29a8.jpg`;
@@ -243,6 +271,7 @@ export default function Profile() {
             <Image source={{ uri: avatar }} style={styles.avatar} />
             <View style={styles.titleCol}>
               <Text style={styles.name}>{name}</Text>
+              {!!user?.email && <Text style={styles.email}>{user.email}</Text>}
               {!!location && (
                 <View style={styles.locationRow}>
                   <Ionicons name="location-outline" size={14} color="#6b7280" />
@@ -250,11 +279,7 @@ export default function Profile() {
                 </View>
               )}
               {!!role && (
-                <Text
-                  style={{ marginTop: 6, color: '#065f46', fontWeight: '700' }}
-                >
-                  {role.toUpperCase()}
-                </Text>
+                <Text style={styles.roleText}>{role.toUpperCase()}</Text>
               )}
             </View>
           </View>
@@ -263,13 +288,15 @@ export default function Profile() {
             {bio}
           </Text>
 
-          <View style={styles.skillsRow}>
-            {skills.slice(0, 4).map((s) => (
-              <View key={s} style={styles.skillChip}>
-                <Text style={styles.skillText}>{s}</Text>
-              </View>
-            ))}
-          </View>
+          {skills.length > 0 && (
+            <View style={styles.skillsRow}>
+              {skills.slice(0, 4).map((s) => (
+                <View key={s} style={styles.skillChip}>
+                  <Text style={styles.skillText}>{s}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
@@ -288,44 +315,36 @@ export default function Profile() {
 
           <View style={styles.actionRow}>
             <TouchableOpacity
-              onPress={() => router.push('/(main)/chef')}
+              onPress={() => router.push('/(main)/myrecipe')}
               style={styles.primaryBtn}
             >
-              <Text style={styles.primaryBtnText}>Manage my recipes</Text>
+              <Text style={styles.primaryBtnText}>My Recipes</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => router.push('/(main)/chef/new')}
+              onPress={() => router.push('/(main)/myrecipe')}
               style={styles.ghostBtn}
             >
-              <Text style={styles.ghostBtnText}>New recipe</Text>
+              <Feather name="plus" size={18} color="#065f46" />
+              <Text style={styles.ghostBtnText}>New</Text>
             </TouchableOpacity>
           </View>
         </LinearGradient>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Badges</Text>
-            <TouchableOpacity onPress={() => router.push('/badges')}>
-              <Text style={styles.linkText}>View all</Text>
-            </TouchableOpacity>
-          </View>
+        {badges.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Badges</Text>
+              <TouchableOpacity onPress={() => router.push('/badges')}>
+                <Text style={styles.linkText}>View all</Text>
+              </TouchableOpacity>
+            </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.badgeRow}
-          >
-            {badges.length === 0 ? (
-              <View style={styles.badgeEmpty}>
-                <MaterialCommunityIcons
-                  name="emoticon-neutral"
-                  size={28}
-                  color="#94a3b8"
-                />
-                <Text style={styles.badgeEmptyText}>No badges yet</Text>
-              </View>
-            ) : (
-              badges.map((b) => (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.badgeRow}
+            >
+              {badges.map((b) => (
                 <View key={b.id ?? b.name} style={styles.badgeCard}>
                   <MaterialCommunityIcons
                     name={(b.icon as any) ?? 'star'}
@@ -334,15 +353,15 @@ export default function Profile() {
                   />
                   <Text style={styles.badgeLabel}>{b.name}</Text>
                 </View>
-              ))
-            )}
-          </ScrollView>
-        </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent recipes</Text>
-            <TouchableOpacity onPress={() => router.push('/(main)/dishes')}>
+            <TouchableOpacity onPress={() => router.push('/(main)/myrecipe')}>
               <Text style={styles.linkText}>See all</Text>
             </TouchableOpacity>
           </View>
@@ -356,7 +375,7 @@ export default function Profile() {
               />
               <Text style={styles.emptyTitle}>No recent recipes</Text>
               <Text style={styles.emptySub}>
-                Publish a recipe to see it here.
+                Create your first recipe to see it here
               </Text>
             </View>
           ) : (
@@ -402,9 +421,59 @@ export default function Profile() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f7fafc' },
+  safe: { flex: 1, backgroundColor: '#f0fdf4' },
   container: { paddingBottom: 36 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  loadingText: { marginTop: 12, color: '#6b7280', fontSize: 14 },
+
+  // Auth styles
+  authIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  authHint: {
+    fontSize: 15,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  loginBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 28,
+    gap: 10,
+    shadowColor: '#16a34a',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  loginText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
   headerGradient: {
     paddingHorizontal: 16,
     paddingBottom: 18,
@@ -434,10 +503,12 @@ const styles = StyleSheet.create({
   },
   titleCol: { flex: 1 },
   name: { fontSize: 20, fontWeight: '800', color: '#052e16' },
+  email: { fontSize: 13, color: '#6b7280', marginTop: 2 },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   locationText: { marginLeft: 6, color: '#6b7280' },
+  roleText: { marginTop: 6, color: '#065f46', fontWeight: '700', fontSize: 12 },
   bio: { marginTop: 10, color: '#475569', lineHeight: 20 },
-  skillsRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  skillsRow: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
   skillChip: {
     backgroundColor: '#eef6f1',
     paddingHorizontal: 10,
@@ -457,20 +528,20 @@ const styles = StyleSheet.create({
   primaryBtn: {
     flex: 1,
     backgroundColor: '#16a34a',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
   },
   primaryBtnText: { color: '#fff', fontWeight: '700' },
   ghostBtn: {
-    marginLeft: 12,
-    borderWidth: 1,
-    borderColor: '#d1fae5',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 2,
+    borderColor: '#d1fae5',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
   },
   ghostBtnText: { color: '#065f46', fontWeight: '700' },
   section: { marginTop: 16 },
@@ -502,14 +573,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#374151',
     textAlign: 'center',
+    fontSize: 12,
   },
-  badgeEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  badgeEmptyText: { color: '#94a3b8', marginLeft: 8 },
   recentCard: {
     width: 220,
     height: 140,

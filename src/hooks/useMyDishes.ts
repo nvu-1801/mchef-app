@@ -6,7 +6,7 @@ import { Dish, DishCard, mapDishToCard } from '@/src/types/dish';
 
 export function useMyDishes() {
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
-  const { data = [], isLoading, refetch } = useListDishesQuery();
+  const { data = [], isLoading, refetch } = useListDishesQuery({});
 
   React.useEffect(() => {
     let mounted = true;

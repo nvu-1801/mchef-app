@@ -32,8 +32,8 @@ const CATEGORIES = [
 export default function MainScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { data = [], isLoading, error, refetch } = useListDishesQuery();
-
+  const { data = [], isLoading, error, refetch } = useListDishesQuery({});
+  console.log(data)
   const [selectedCat, setSelectedCat] = React.useState('all');
 
   // spotlight: first 5 dishes

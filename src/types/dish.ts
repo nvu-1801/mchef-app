@@ -5,23 +5,44 @@ export type ID = string;
 export type Diet = 'veg' | 'nonveg';
 export type PublishStatus = 'draft' | 'published';
 
+/** —— Category Types —— */
+export interface CategoryBE {
+  id: ID;
+  name: string;
+  slug?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  parent_id?: ID | null;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Category {
   id?: ID;
   name?: string;
   slug?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  parent_id?: ID | null;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 /** —— Kiểu từ Backend (raw) —— */
 export interface DishBE {
   id: ID;
-  title: string;
+  title?: string;
+  name?: string;
   slug: string;
   cover_image_url?: string | null;
   description?: string | null;
   diet?: Diet | string | null;
-  category?: Category | null;
+  category?: CategoryBE | null;
   servings?: number | null;
   time_minutes?: number | null;
+  status?: PublishStatus;
 
   // các field đồng nghĩa (khác API có thể trả cái này cái kia)
   created_by?: ID | null;
@@ -35,7 +56,6 @@ export interface DishBE {
   // đôi khi BE trả kèm
   images?: string[];
   tips?: string | null;
-  name?: string | null;
 }
 
 /** —— Payload gửi lên Backend —— */
@@ -52,7 +72,7 @@ export interface DishInput {
   status?: PublishStatus; // 'draft' | 'published'
 }
 
-/** —— Kiểu “Chuẩn hoá” trong app —— */
+/** —— Kiểu "Chuẩn hoá" trong app —— */
 export interface Dish {
   id: ID;
   name: string;
@@ -66,7 +86,8 @@ export interface Dish {
   created_by?: ID | null;
   created_at?: string;
   updated_at?: string;
-  published?: boolean | null; // nếu API có concept publish
+  status?: PublishStatus;
+  published?: boolean | null; // derived from status
 }
 
 /** —— Kiểu cho UI Card/List —— */
@@ -86,7 +107,11 @@ export interface DishCard {
 }
 
 /** —— Helpers —— */
-export const toFullUrl = (p?: string, supabaseUrl?: string, assetBase?: string) => {
+export const toFullUrl = (
+  p?: string,
+  supabaseUrl?: string,
+  assetBase?: string,
+) => {
   if (!p) return '';
   if (/^https?:\/\//i.test(p)) return p;
   const clean = p.replace(/^\/+/, '');
@@ -96,7 +121,10 @@ export const toFullUrl = (p?: string, supabaseUrl?: string, assetBase?: string) 
   return assetBase ? `${assetBase}/${clean}` : '';
 };
 
-export function unwrapList<T = unknown>(resp: unknown, keys: string[] = ['data', 'items', 'dishes']): T[] {
+export function unwrapList<T = unknown>(
+  resp: unknown,
+  keys: string[] = ['data', 'items', 'dishes'],
+): T[] {
   if (Array.isArray(resp)) return resp as T[];
   if (resp && typeof resp === 'object') {
     const anyResp = resp as any;
@@ -107,7 +135,10 @@ export function unwrapList<T = unknown>(resp: unknown, keys: string[] = ['data',
   return [];
 }
 
-export function unwrapOne<T = unknown>(resp: unknown, keys: string[] = ['data', 'item']): T | null {
+export function unwrapOne<T = unknown>(
+  resp: unknown,
+  keys: string[] = ['data', 'item'],
+): T | null {
   if (!resp) return null;
   if (Array.isArray(resp)) return (resp[0] as T) ?? null;
   if (typeof resp === 'object') {
@@ -120,7 +151,10 @@ export function unwrapOne<T = unknown>(resp: unknown, keys: string[] = ['data', 
   return null;
 }
 
-export const formatRelativeTime = (dateStr?: string, now: Date = new Date()): string => {
+export const formatRelativeTime = (
+  dateStr?: string,
+  now: Date = new Date(),
+): string => {
   if (!dateStr) return '';
   const date = new Date(dateStr);
   const diff = now.getTime() - date.getTime();
@@ -138,12 +172,29 @@ export const formatRelativeTime = (dateStr?: string, now: Date = new Date()): st
 };
 
 /** —— Mappers —— */
+export function mapCategory(c: CategoryBE): Category {
+  return {
+    id: c.id,
+    name: c.name,
+    slug: c.slug ?? undefined,
+    description: c.description ?? undefined,
+    image_url: c.image_url ?? undefined,
+    parent_id: c.parent_id ?? undefined,
+    is_active: c.is_active ?? true,
+    created_at: c.created_at ?? undefined,
+    updated_at: c.updated_at ?? undefined,
+  };
+}
+
 export function mapDishBEToDish(
   d: DishBE,
-  opts?: { supabaseUrl?: string; assetBase?: string }
+  opts?: { supabaseUrl?: string; assetBase?: string },
 ): Dish {
-  const cover = d.cover_image_url ? toFullUrl(d.cover_image_url, opts?.supabaseUrl, opts?.assetBase) : undefined;
+  const cover = d.cover_image_url
+    ? toFullUrl(d.cover_image_url, opts?.supabaseUrl, opts?.assetBase)
+    : undefined;
   const images = cover ? [cover] : Array.isArray(d.images) ? d.images : [];
+
   return {
     id: d.id,
     name: d.title ?? d.name ?? '',
@@ -151,32 +202,35 @@ export function mapDishBEToDish(
     images,
     description: d.description ?? d.tips ?? null,
     diet: d.diet ?? null,
-    category: d.category ?? null,
+    category: d.category ? mapCategory(d.category) : null,
     servings: d.servings ?? null,
     time_minutes: d.time_minutes ?? null,
     created_by: d.created_by ?? d.creator_id ?? d.user_id ?? null,
     created_at: d.created_at,
     updated_at: d.updated_at,
-    // published: có thể suy từ status nếu BE trả về; để null nếu không chắc
-    published: undefined as any,
+    status: d.status,
+    published: d.status === 'published',
   };
 }
 
-export function mapDishToCard(d: Dish, publishedFlag?: boolean, now: Date = new Date()): DishCard {
-  const cover =
-    d.images?.[0] ??
-    'https://picsum.photos/400/300';
+export function mapDishToCard(
+  d: Dish,
+  publishedFlag?: boolean,
+  now: Date = new Date(),
+): DishCard {
+  const cover = d.images?.[0] ?? 'https://picsum.photos/400/300';
 
   // nếu không có flag truyền vào, suy bằng !!d.published
-  const pub = typeof publishedFlag === 'boolean' ? publishedFlag : !!d.published;
+  const pub =
+    typeof publishedFlag === 'boolean' ? publishedFlag : !!d.published;
 
   const updatedAt = pub
     ? d.created_at
       ? `Published ${formatRelativeTime(d.created_at, now)}`
       : 'Published'
     : d.updated_at
-    ? `Edited ${formatRelativeTime(d.updated_at, now)}`
-    : 'Draft';
+      ? `Edited ${formatRelativeTime(d.updated_at, now)}`
+      : 'Draft';
 
   return {
     id: d.id,

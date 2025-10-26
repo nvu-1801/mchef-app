@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
   Switch,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type Diet = 'veg' | 'nonveg';
 
@@ -32,9 +34,9 @@ type Props = {
   mode: 'create' | 'edit';
   initial?: Partial<RecipeForm>;
   onClose: () => void;
-  onSubmit: (data: RecipeForm) => Promise<void>; // bạn truyền hàm create/update vào đây
-  onDelete?: () => Promise<void>;                // optional: hiển thị khi edit
-  titleText?: string;                            // custom header
+  onSubmit: (data: RecipeForm) => Promise<void>;
+  onDelete?: () => Promise<void>;
+  titleText?: string;
 };
 
 export function RecipeCrudModal({
@@ -58,7 +60,8 @@ export function RecipeCrudModal({
   });
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const header = titleText ?? (mode === 'create' ? 'Create Recipe' : 'Edit Recipe');
+  const header =
+    titleText ?? (mode === 'create' ? 'Create Recipe' : 'Edit Recipe');
 
   useEffect(() => {
     setForm({
@@ -118,122 +121,233 @@ export function RecipeCrudModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
       <KeyboardAvoidingView
         behavior={Platform.select({ ios: 'padding', android: undefined })}
         style={styles.overlay}
       >
         <View style={styles.sheet}>
+          {/* Decorative top bar */}
+          <View style={styles.handleBar} />
+
           <View style={styles.headerRow}>
-            <Text style={styles.header}>{header}</Text>
+            <View>
+              <Text style={styles.headerLabel}>Recipe Manager</Text>
+              <Text style={styles.header}>{header}</Text>
+            </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeText}>✕</Text>
+              <Feather name="x" size={20} color="#6b7280" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ paddingBottom: 12 }}>
-            <Text style={styles.label}>Title *</Text>
-            <TextInput
-              value={form.title}
-              onChangeText={(t) => update('title', t)}
-              placeholder="e.g. Grilled Chicken"
-              style={styles.input}
-            />
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                <Feather name="edit-3" size={12} color="#16a34a" /> Title *
+              </Text>
+              <View style={[styles.inputWrapper, styles.inputFocusable]}>
+                <TextInput
+                  value={form.title}
+                  onChangeText={(t) => update('title', t)}
+                  placeholder="e.g. Grilled Salmon with Herbs"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.input}
+                />
+              </View>
+            </View>
 
-            <Text style={styles.label}>Summary</Text>
-            <TextInput
-              value={form.summary ?? ''}
-              onChangeText={(t) => update('summary', t)}
-              placeholder="Short description"
-              style={[styles.input, styles.textarea]}
-              multiline
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                <Feather name="file-text" size={12} color="#16a34a" /> Summary
+              </Text>
+              <View style={[styles.inputWrapper, styles.textareaWrapper]}>
+                <TextInput
+                  value={form.summary ?? ''}
+                  onChangeText={(t) => update('summary', t)}
+                  placeholder="A brief description of your delicious creation..."
+                  placeholderTextColor="#9ca3af"
+                  style={[styles.input, styles.textarea]}
+                  multiline
+                />
+              </View>
+            </View>
 
-            <Text style={styles.label}>Cover URL</Text>
-            <TextInput
-              value={form.cover ?? ''}
-              onChangeText={(t) => update('cover', t)}
-              placeholder="https://..."
-              style={styles.input}
-              autoCapitalize="none"
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                <Feather name="image" size={12} color="#16a34a" /> Cover Image
+              </Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  value={form.cover ?? ''}
+                  onChangeText={(t) => update('cover', t)}
+                  placeholder="https://example.com/image.jpg"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.input}
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
 
-            <Text style={styles.label}>Category ID</Text>
-            <TextInput
-              value={form.category_id ?? ''}
-              onChangeText={(t) => update('category_id', t)}
-              placeholder="category id"
-              style={styles.input}
-              autoCapitalize="none"
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                <Feather name="tag" size={12} color="#16a34a" /> Category
+              </Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  value={form.category_id ?? ''}
+                  onChangeText={(t) => update('category_id', t)}
+                  placeholder="Category ID"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.input}
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
 
             <View style={styles.row}>
               <View style={[styles.col, { marginRight: 8 }]}>
-                <Text style={styles.label}>Servings</Text>
-                <TextInput
-                  value={form.servings != null ? String(form.servings) : ''}
-                  onChangeText={(t) => update('servings', t ? Number(t) : null)}
-                  placeholder="e.g. 2"
-                  style={styles.input}
-                  keyboardType="number-pad"
-                />
+                <Text style={styles.label}>
+                  <Feather name="users" size={12} color="#16a34a" /> Servings
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={form.servings != null ? String(form.servings) : ''}
+                    onChangeText={(t) =>
+                      update('servings', t ? Number(t) : null)
+                    }
+                    placeholder="4"
+                    placeholderTextColor="#9ca3af"
+                    style={styles.input}
+                    keyboardType="number-pad"
+                  />
+                </View>
               </View>
               <View style={[styles.col, { marginLeft: 8 }]}>
-                <Text style={styles.label}>Time (minutes)</Text>
-                <TextInput
-                  value={form.time_minutes != null ? String(form.time_minutes) : ''}
-                  onChangeText={(t) => update('time_minutes', t ? Number(t) : null)}
-                  placeholder="e.g. 15"
-                  style={styles.input}
-                  keyboardType="number-pad"
-                />
+                <Text style={styles.label}>
+                  <Feather name="clock" size={12} color="#16a34a" /> Time (min)
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={
+                      form.time_minutes != null ? String(form.time_minutes) : ''
+                    }
+                    onChangeText={(t) =>
+                      update('time_minutes', t ? Number(t) : null)
+                    }
+                    placeholder="30"
+                    placeholderTextColor="#9ca3af"
+                    style={styles.input}
+                    keyboardType="number-pad"
+                  />
+                </View>
               </View>
             </View>
 
-            <Text style={styles.label}>Diet</Text>
-            <View style={styles.pillRow}>
-              {(['veg', 'nonveg'] as Diet[]).map((d) => (
-                <TouchableOpacity
-                  key={d}
-                  style={[
-                    styles.pill,
-                    form.diet === d && styles.pillActive,
-                  ]}
-                  onPress={() => update('diet', form.diet === d ? null : d)}
-                >
-                  <Text style={[styles.pillText, form.diet === d && styles.pillTextActive]}>
-                    {d === 'veg' ? 'Veg' : 'Non-veg'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                <Feather name="heart" size={12} color="#16a34a" /> Diet
+                Preference
+              </Text>
+              <View style={styles.pillRow}>
+                {(['veg', 'nonveg'] as Diet[]).map((d) => (
+                  <TouchableOpacity
+                    key={d}
+                    style={[styles.pill, form.diet === d && styles.pillActive]}
+                    onPress={() => update('diet', form.diet === d ? null : d)}
+                  >
+                    <Feather
+                      name={form.diet === d ? 'check-circle' : 'circle'}
+                      size={16}
+                      color={form.diet === d ? '#16a34a' : '#9ca3af'}
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text
+                      style={[
+                        styles.pillText,
+                        form.diet === d && styles.pillTextActive,
+                      ]}
+                    >
+                      {d === 'veg' ? 'Vegetarian' : 'Non-vegetarian'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
-            <View style={[styles.row, { alignItems: 'center', marginTop: 8 }]}>
-              <Text style={[styles.label, { marginBottom: 0, flex: 1 }]}>Published</Text>
+            <View style={styles.publishCard}>
+              <View style={styles.publishIcon}>
+                <Feather name="globe" size={20} color="#16a34a" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.publishTitle}>Publish Recipe</Text>
+                <Text style={styles.publishHint}>Share with the community</Text>
+              </View>
               <Switch
                 value={!!form.published}
                 onValueChange={(v) => update('published', v)}
+                trackColor={{ false: '#d1d5db', true: '#86efac' }}
+                thumbColor={form.published ? '#16a34a' : '#f3f4f6'}
               />
             </View>
           </ScrollView>
 
           <View style={styles.footer}>
             {mode === 'edit' && onDelete ? (
-              <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} disabled={deleting}>
-                {deleting ? <ActivityIndicator /> : <Text style={styles.deleteText}>Delete</Text>}
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color="#dc2626" />
+                ) : (
+                  <>
+                    <Feather name="trash-2" size={18} color="#dc2626" />
+                    <Text style={styles.deleteText}>Delete</Text>
+                  </>
+                )}
               </TouchableOpacity>
             ) : (
               <View />
             )}
 
             <TouchableOpacity
-              style={[styles.primaryBtn, !canSubmit || loading ? styles.disabled : null]}
+              style={[
+                styles.primaryBtn,
+                (!canSubmit || loading) && styles.disabled,
+              ]}
               onPress={handleSubmit}
               disabled={!canSubmit || loading}
             >
-              {loading ? <ActivityIndicator color="#fff" /> : (
-                <Text style={styles.primaryText}>{mode === 'create' ? 'Create' : 'Save'}</Text>
-              )}
+              <LinearGradient
+                colors={['#16a34a', '#15803d']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.gradient}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Feather
+                      name={mode === 'create' ? 'plus-circle' : 'check-circle'}
+                      size={20}
+                      color="#fff"
+                    />
+                    <Text style={styles.primaryText}>
+                      {mode === 'create' ? 'Create Recipe' : 'Save Changes'}
+                    </Text>
+                  </>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
@@ -243,37 +357,208 @@ export function RecipeCrudModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.3)' },
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
   sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    maxHeight: '92%',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 12,
+  },
+  handleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#d1d5db',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0fdf4',
+  },
+  headerLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#16a34a',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#111827',
+    marginTop: 4,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f9fafb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 10,
+  },
+  inputWrapper: {
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    backgroundColor: '#fafafa',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    maxHeight: '90%',
+    paddingVertical: 4,
   },
-  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  header: { fontSize: 18, fontWeight: '700', flex: 1 },
-  closeBtn: { padding: 8 },
-  closeText: { fontSize: 18 },
-  label: { fontSize: 13, color: '#4b5563', marginTop: 12, marginBottom: 6 },
+  inputFocusable: {
+    borderColor: '#d1fae5',
+  },
+  textareaWrapper: {
+    paddingVertical: 12,
+  },
   input: {
-    borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 10, fontSize: 14, backgroundColor: '#fff',
+    fontSize: 15,
+    color: '#111827',
+    paddingVertical: 12,
   },
-  textarea: { height: 90, textAlignVertical: 'top' },
-  row: { flexDirection: 'row' },
-  col: { flex: 1 },
-  pillRow: { flexDirection: 'row' },
+  textarea: {
+    height: 90,
+    textAlignVertical: 'top',
+  },
+  row: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  col: {
+    flex: 1,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
   pill: {
-    borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, marginRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#fafafa',
   },
-  pillActive: { backgroundColor: '#eef6f1', borderColor: '#c7e2d3' },
-  pillText: { color: '#111827', fontSize: 13 },
-  pillTextActive: { fontWeight: '700', color: '#065f46' },
-  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
-  primaryBtn: { backgroundColor: '#111827', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12 },
-  disabled: { opacity: 0.6 },
-  primaryText: { color: '#fff', fontWeight: '700' },
-  deleteBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#fff0f0' },
-  deleteText: { color: '#dc2626', fontWeight: '700' },
+  pillActive: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#86efac',
+  },
+  pillText: {
+    color: '#6b7280',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pillTextActive: {
+    color: '#16a34a',
+    fontWeight: '700',
+  },
+  publishCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#d1fae5',
+  },
+  publishIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  publishTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  publishHint: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f0fdf4',
+  },
+  primaryBtn: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#16a34a',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  gradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    gap: 10,
+  },
+  disabled: {
+    opacity: 0.5,
+  },
+  primaryText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#fef2f2',
+    borderWidth: 2,
+    borderColor: '#fecaca',
+    gap: 8,
+  },
+  deleteText: {
+    color: '#dc2626',
+    fontWeight: '700',
+    fontSize: 15,
+  },
 });

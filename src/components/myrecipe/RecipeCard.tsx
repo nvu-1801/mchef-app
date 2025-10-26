@@ -21,8 +21,8 @@ type Props = {
   servings?: number | null;
   time_minutes?: number | null;
   diet?: string | null;
-  onDelete: (id: string) => void;
-  onEdit?: (id: string) => void;
+  onDelete: (id: string) => void;     // parent xử lý xoá
+  onEdit?: (id: string) => void;      // parent mở modal edit
 };
 
 export function RecipeCard({
@@ -42,8 +42,8 @@ export function RecipeCard({
   const router = useRouter();
 
   const handleEdit = () => {
-    if (onEdit) return onEdit(id);
-    router.push(`/(main)/chef/${id}`);
+    if (onEdit) return onEdit(id); // parent mở RecipeCrudModal
+    router.push(`/(main)/chef/${id}`); // fallback: điều hướng trang edit cũ
   };
 
   const handleDeleteConfirm = () => {
@@ -64,6 +64,7 @@ export function RecipeCard({
   return (
     <TouchableOpacity
       style={styles.card}
+      activeOpacity={0.9}
       onPress={() =>
         router.push(published ? `/recipe/${id}` : `/(main)/chef/${id}`)
       }
@@ -137,16 +138,10 @@ export function RecipeCard({
       </View>
 
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionBtn, { marginTop: 8 }]}
-          onPress={handleEdit}
-        >
+        <TouchableOpacity style={[styles.actionBtn, { marginTop: 8 }]} onPress={handleEdit}>
           <Feather name="edit-2" size={16} color="#2d9cdb" />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={handleDeleteConfirm}
-        >
+        <TouchableOpacity style={styles.actionBtn} onPress={handleDeleteConfirm}>
           <Feather name="trash-2" size={16} color="#dc2626" />
         </TouchableOpacity>
       </View>
