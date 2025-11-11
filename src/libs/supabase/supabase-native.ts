@@ -11,9 +11,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabaseNative = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
+   persistSession: true,               // keep session across app launches
+    autoRefreshToken: true,             // refresh in background
+    storage: AsyncStorage,              // RN storage (critical)
+    detectSessionInUrl: false,          // not using web hash/redirect in RN
+    flowType: 'pkce',              
   },
 });

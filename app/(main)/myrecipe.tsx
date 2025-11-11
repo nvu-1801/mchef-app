@@ -9,6 +9,7 @@ import {
   Alert,
   FlatList,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -21,24 +22,19 @@ import { useMyDishes } from '@/src/hooks/useMyDishes';
 import { useAuth } from '@/src/hooks/useAuth';
 import {
   StatsCard,
-  QuickActions,
   RecipeCard,
   EmptyState,
   RecipeCrudModal,
 } from '@/src/components/myrecipe';
-import type { Dish, DishCard, DishInput, Diet } from '@/src/types/dish';
+import type { Dish, DishInput, Diet } from '@/src/types/dish';
+import type {
+  RecipeForm as RecipeFormModal,
+  RecipeStepInput,
+  IngredientInput,
+} from '@/src/components/myrecipe/RecipeCrudModal';
+import { useUserRole } from '@/src/hooks/useUserRole';
 
-// Form dùng trong Modal (UI schema)
-type RecipeForm = {
-  title: string;
-  summary?: string;
-  cover?: string;
-  category_id?: string;
-  servings?: number | null;
-  time_minutes?: number | null;
-  diet?: Diet | 'nonveg' | null;
-  published?: boolean;
-};
+const PAGE_SIZE = 10; // ⬅️ số item mỗi trang
 
 export default function MyRecipeScreen() {
   const router = useRouter();
@@ -48,17 +44,95 @@ export default function MyRecipeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [mode, setMode] = useState<'create' | 'edit'>('create');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [initialForm, setInitialForm] = useState<Partial<RecipeForm>>({});
+  const [initialForm, setInitialForm] = useState<Partial<RecipeFormModal>>({});
 
   const [deleteDish] = useDeleteDishMutation();
   const [createDish] = useCreateDishMutation();
   const [updateDish] = useUpdateDishMutation();
 
-  console.log('[MyRecipe] Auth status:', {
-    isAuthenticated,
-    userId: user?.id,
-    email: user?.email,
-  });
+  // ===== Pagination state =====
+  const [page, setPage] = useState(1);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const { role, canManage, loading: roleLoading } = useUserRole();
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [searchQuery]);
+
+  // if (authLoading || isLoading || roleLoading) {
+  //   return (
+  //     <SafeAreaView style={styles.safe}>
+  //       <View style={styles.center}>
+  //         <ActivityIndicator size="large" color="#16a34a" />
+  //       </View>
+  //     </SafeAreaView>
+  //   );
+  // }
+
+   const checkAuthAndPerm = () => {
+    if (!isAuthenticated) {
+      Alert.alert('Authentication Required', 'Please login to continue', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Login', onPress: () => router.replace('/(auth)/sign-in') },
+      ]);
+      return false;
+    }
+    if (!canManage) {
+      Alert.alert('Permission denied', 'Only chef or admin can manage recipes.');
+      return false;
+    }
+    return true;
+  };
+
+  function stripVN(s: string) {
+    return s
+      .normalize?.('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase();
+  }
+
+  // Lọc theo searchQuery (tiêu đề, mô tả, category, diet)
+  const filtered = useMemo(() => {
+    if (!searchQuery.trim()) return myDishes;
+    const q = stripVN(searchQuery.trim());
+    return myDishes.filter((d) => {
+      const name = stripVN(d.name ?? '');
+      const desc = stripVN(d.description ?? '');
+      const cat = stripVN(d.category?.name ?? '');
+      const diet = stripVN(String(d.diet ?? ''));
+      return (
+        name.includes(q) ||
+        desc.includes(q) ||
+        cat.includes(q) ||
+        diet.includes(q)
+      );
+    });
+  }, [myDishes, searchQuery]);
+
+  const visibleData = useMemo(
+    () => filtered.slice(0, page * PAGE_SIZE),
+    [filtered, page],
+  );
+
+  const total = filtered.length;
+  const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasMore = page < maxPage;
+
+  const loadMore = () => {
+    if (!hasMore || isLoading) return;
+    setPage((p) => p + 1);
+  };
+
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      setPage(1);
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const stats = useMemo(
     () => [
@@ -87,7 +161,7 @@ export default function MyRecipeScreen() {
     [myDishes.length, drafts.length, published.length],
   );
 
-  // ====== Check Auth Helper ======
+  // ====== Check Auth Helper (chuẩn hoá route login) ======
   const checkAuth = () => {
     if (!isAuthenticated) {
       Alert.alert(
@@ -97,7 +171,7 @@ export default function MyRecipeScreen() {
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Login',
-            onPress: () => router.push('/(auth)/login'),
+            onPress: () => router.replace('/(auth)/sign-in'),
           },
         ],
       );
@@ -113,7 +187,7 @@ export default function MyRecipeScreen() {
     setInitialForm({
       title: '',
       summary: '',
-      cover: '',
+      cover_image_url: '',
       category_id: '',
       servings: null,
       time_minutes: null,
@@ -132,7 +206,7 @@ export default function MyRecipeScreen() {
     setInitialForm({
       title: dish.name ?? '',
       summary: dish.description ?? '',
-      cover: dish.images?.[0] ?? '',
+      cover_image_url: dish.images?.[0] ?? '',
       category_id: dish.category?.id ?? '',
       servings: dish.servings ?? null,
       time_minutes: dish.time_minutes ?? null,
@@ -157,12 +231,16 @@ export default function MyRecipeScreen() {
           onPress: async () => {
             try {
               await deleteDish(id).unwrap();
-              refetch();
+              await refetch();
+              setPage(1); // reset trang sau khi xoá
             } catch (e: any) {
               console.error('[MyRecipe] Delete error:', e);
               if (e.originalStatus === 401 || e.status === 401) {
                 Alert.alert('Session Expired', 'Please login again', [
-                  { text: 'OK', onPress: () => router.push('/(auth)/login') },
+                  {
+                    text: 'OK',
+                    onPress: () => router.replace('/(auth)/sign-in'),
+                  },
                 ]);
               } else {
                 Alert.alert('Error', 'Failed to delete recipe');
@@ -174,17 +252,26 @@ export default function MyRecipeScreen() {
     );
   };
 
-  const handleSubmitModal = async (values: RecipeForm) => {
+  const handleSubmitModal = async (values: RecipeFormModal) => {
     if (!checkAuth()) return;
 
+    // Map từ form sang payload backend
     const payload: DishInput = {
-      title: values.title,
-      description: values.summary ?? '',
-      cover_image_url: values.cover ?? '',
+      title: values.title.trim(),
+      description: values.summary?.trim() ?? '',
+      cover_image_url: values.cover_image_url?.trim() ?? '',
       category_id: values.category_id || undefined,
       servings: values.servings ?? undefined,
       time_minutes: values.time_minutes ?? undefined,
       diet: values.diet ?? undefined,
+      ingredients:
+        values.dish_ingredients
+          ?.map((i) => i.ingredient.trim())
+          .filter((t) => t.length > 0) ?? [],
+      instructions:
+        values.recipe_steps
+          ?.map((s) => s.content.trim())
+          .filter((t) => t.length > 0) ?? [],
       status: values.published ? 'published' : 'draft',
     };
 
@@ -194,13 +281,16 @@ export default function MyRecipeScreen() {
       } else if (mode === 'edit' && editingId) {
         await updateDish({ id: editingId, data: payload }).unwrap();
       }
+
       await refetch();
+      setPage(1);
       closeModal();
     } catch (e: any) {
       console.error('[MyRecipe] Submit error:', e);
+
       if (e.originalStatus === 401 || e.status === 401) {
         Alert.alert('Session Expired', 'Please login again', [
-          { text: 'OK', onPress: () => router.push('/(auth)/login') },
+          { text: 'OK', onPress: () => router.replace('/(main)/myrecipe') },
         ]);
       } else {
         Alert.alert('Error', e?.data?.message ?? e?.message ?? 'Submit failed');
@@ -213,12 +303,13 @@ export default function MyRecipeScreen() {
     try {
       await deleteDish(editingId).unwrap();
       await refetch();
+      setPage(1);
       closeModal();
     } catch (e: any) {
       console.error('[MyRecipe] Delete error:', e);
       if (e.originalStatus === 401 || e.status === 401) {
         Alert.alert('Session Expired', 'Please login again', [
-          { text: 'OK', onPress: () => router.push('/(auth)/login') },
+          { text: 'OK', onPress: () => router.replace('/(auth)/sign-in') },
         ]);
       } else {
         Alert.alert('Error', e?.data?.message ?? e?.message ?? 'Delete failed');
@@ -226,7 +317,6 @@ export default function MyRecipeScreen() {
     }
   };
 
-  // Loading state
   if (authLoading || isLoading) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -237,7 +327,6 @@ export default function MyRecipeScreen() {
     );
   }
 
-  // Not authenticated
   if (!isAuthenticated) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -251,7 +340,7 @@ export default function MyRecipeScreen() {
           </Text>
           <TouchableOpacity
             style={styles.loginBtn}
-            onPress={() => router.push('/(auth)/sign-in')}
+            onPress={() => router.replace('/(auth)/sign-in')}
           >
             <Feather name="log-in" size={18} color="#fff" />
             <Text style={styles.loginText}>Go to Login</Text>
@@ -264,10 +353,14 @@ export default function MyRecipeScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <FlatList<Dish>
-        data={myDishes}
+        data={visibleData} // ⬅️ dùng data đã phân trang
         keyExtractor={(it) => it.id}
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        onEndReachedThreshold={0.3}
+        onEndReached={loadMore}
         ListHeaderComponent={
           <>
             <View style={styles.header}>
@@ -298,16 +391,29 @@ export default function MyRecipeScreen() {
                 <StatsCard key={s.label} {...s} />
               ))}
             </ScrollView>
-
-            <QuickActions />
-
+            {/* Search bar */}
+            <View style={{ paddingHorizontal: 20, marginTop: 4 }}>
+              <View style={styles.searchWrap}>
+                <Feather name="search" size={18} color="#6b7280" />
+                <TextInput
+                  style={styles.searchInput}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search my recipes…"
+                  placeholderTextColor="#9aa3b2"
+                  returnKeyType="search"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery ? (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <Feather name="x" size={18} color="#6b7280" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Manage recipes</Text>
-              <TouchableOpacity
-                onPress={() => router.push('/(main)/chef?mine=1')}
-              >
-                <Text style={styles.linkText}>View all</Text>
-              </TouchableOpacity>
             </View>
           </>
         }
@@ -341,7 +447,41 @@ export default function MyRecipeScreen() {
             />
           );
         }}
-        ListEmptyComponent={<EmptyState />}
+        ListEmptyComponent={
+          searchQuery ? (
+            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <Text style={{ color: '#6b7280' }}>
+                No results for “{searchQuery}”.
+              </Text>
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={{ marginTop: 8 }}
+              >
+                <Text style={{ color: '#16a34a', fontWeight: '600' }}>
+                  Clear search
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <EmptyState />
+          )
+        }
+        ListFooterComponent={
+          total > 0 ? (
+            hasMore ? (
+              <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color="#16a34a" />
+                <Text style={{ marginTop: 8, color: '#6b7280' }}>
+                  Loading more…
+                </Text>
+              </View>
+            ) : (
+              <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                <Text style={{ color: '#9aa3b2' }}>— No more recipes —</Text>
+              </View>
+            )
+          ) : null
+        }
       />
 
       <RecipeCrudModal
@@ -449,6 +589,22 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1f2937',
   },
 });
 

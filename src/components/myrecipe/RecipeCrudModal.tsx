@@ -15,19 +15,41 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { supabaseNative } from '@/src/libs/supabase/supabase-native';
+import ImagePreview from '@/src/components/common/ImagePreview';
+import CategorySelect from '@/src/components/categories/CategorySelect';
 
 type Diet = 'veg' | 'nonveg';
 
+export type RecipeStepInput = {
+  step_no: number;
+  content: string;
+  image_url?: string | null;
+};
+
+export type IngredientInput = {
+  ingredient: string;
+  amount: number | null;
+  note?: string | null;
+};
+
 export type RecipeForm = {
-  title: string;
-  summary?: string;
-  cover?: string;
-  category_id?: string;
+  title: string; // hiển thị label "Food name"
+  slug?: string; // ẩn khỏi UI, auto-generate
+  summary?: string | null;
+  cover_image_url?: string | null;
+  category_id?: string; // chọn từ dropdown
   servings?: number | null;
   time_minutes?: number | null;
   diet?: Diet | null;
+  tips?: string | null;
   published?: boolean;
+
+  recipe_steps: RecipeStepInput[];
+  dish_ingredients: IngredientInput[];
 };
+
+type Category = { id: string; name: string; slug: string };
 
 type Props = {
   visible: boolean;
@@ -39,6 +61,113 @@ type Props = {
   titleText?: string;
 };
 
+/* ===================== helpers ===================== */
+function slugifyVI(input: string): string {
+  return input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // bỏ dấu
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-') // non-alnum -> -
+    .replace(/^-+|-+$/g, '') // trim -
+    .replace(/-+/g, '-'); // collapse --
+}
+
+function FieldGroup({
+  label,
+  labelIcon,
+  children,
+}: {
+  label: string;
+  labelIcon: any;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>
+        <Feather name={labelIcon} size={12} color="#16a34a" /> {label}
+      </Text>
+      <View style={styles.inputWrapper}>{children}</View>
+    </View>
+  );
+}
+
+function Input(
+  props: React.ComponentProps<typeof TextInput> & { multiline?: boolean },
+) {
+  const { style, multiline, ...rest } = props;
+  return (
+    <TextInput
+      {...rest}
+      placeholderTextColor="#9ca3af"
+      style={[styles.input, multiline && styles.textarea, style]}
+      multiline={multiline}
+    />
+  );
+}
+
+function SmallLabel({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: any;
+}) {
+  return <Text style={[styles.smallLabel, style]}>{children}</Text>;
+}
+
+function SectionTitle({ icon, text }: { icon: any; text: string }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        marginTop: 10,
+      }}
+    >
+      <Feather name={icon} size={14} color="#16a34a" />
+      <Text
+        style={{
+          fontWeight: '800',
+          fontSize: 16,
+          marginLeft: 6,
+          color: '#111827',
+        }}
+      >
+        {text}
+      </Text>
+    </View>
+  );
+}
+
+function AddButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.addBtn} onPress={onPress}>
+      <Feather name="plus" size={16} color="#16a34a" />
+      <Text style={styles.addBtnText}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function IconButton({
+  icon,
+  onPress,
+  color = '#6b7280',
+}: {
+  icon: any;
+  onPress: () => void;
+  color?: string;
+}) {
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.iconBtn}>
+      <Feather name={icon} size={18} color={color} />
+    </TouchableOpacity>
+  );
+}
+
+/* ===================== main ===================== */
 export function RecipeCrudModal({
   visible,
   mode,
@@ -50,53 +179,221 @@ export function RecipeCrudModal({
 }: Props) {
   const [form, setForm] = useState<RecipeForm>({
     title: '',
+    slug: '',
     summary: '',
-    cover: '',
+    cover_image_url: '',
     category_id: '',
     servings: null,
     time_minutes: null,
     diet: null,
+    tips: '',
     published: false,
+    recipe_steps: [{ step_no: 1, content: '', image_url: null }],
+    dish_ingredients: [{ ingredient: '', amount: null, note: '' }],
   });
+
+  // categories state
+  const [cats, setCats] = useState<Category[]>([]);
+  const [catOpen, setCatOpen] = useState(false); // dropdown open/close
+  const [catLoading, setCatLoading] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const header =
     titleText ?? (mode === 'create' ? 'Create Recipe' : 'Edit Recipe');
 
+  const update = <K extends keyof RecipeForm>(k: K, v: RecipeForm[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const setStep = (idx: number, patch: Partial<RecipeStepInput>) =>
+    setForm((f) => {
+      const next = [...f.recipe_steps];
+      next[idx] = { ...next[idx], ...patch };
+      return {
+        ...f,
+        recipe_steps: next.map((s, i) => ({ ...s, step_no: i + 1 })),
+      };
+    });
+
+  const addStep = () =>
+    setForm((f) => ({
+      ...f,
+      recipe_steps: [
+        ...f.recipe_steps,
+        { step_no: f.recipe_steps.length + 1, content: '', image_url: null },
+      ],
+    }));
+
+  const removeStep = (idx: number) =>
+    setForm((f) => {
+      const next = f.recipe_steps
+        .filter((_, i) => i !== idx)
+        .map((s, i) => ({ ...s, step_no: i + 1 }));
+      return {
+        ...f,
+        recipe_steps: next.length
+          ? next
+          : [{ step_no: 1, content: '', image_url: null }],
+      };
+    });
+
+  const moveStep = (idx: number, dir: -1 | 1) =>
+    setForm((f) => {
+      const next = [...f.recipe_steps];
+      const j = idx + dir;
+      if (j < 0 || j >= next.length) return f;
+      const tmp = next[idx];
+      next[idx] = next[j];
+      next[j] = tmp;
+      return {
+        ...f,
+        recipe_steps: next.map((s, i) => ({ ...s, step_no: i + 1 })),
+      };
+    });
+
+  const setIng = (idx: number, patch: Partial<IngredientInput>) =>
+    setForm((f) => {
+      const next = [...f.dish_ingredients];
+      next[idx] = { ...next[idx], ...patch };
+      return { ...f, dish_ingredients: next };
+    });
+
+  const addIng = () =>
+    setForm((f) => ({
+      ...f,
+      dish_ingredients: [
+        ...f.dish_ingredients,
+        { ingredient: '', amount: null, note: '' },
+      ],
+    }));
+
+  const removeIng = (idx: number) =>
+    setForm((f) => {
+      const next = f.dish_ingredients.filter((_, i) => i !== idx);
+      return {
+        ...f,
+        dish_ingredients: next.length
+          ? next
+          : [{ ingredient: '', amount: null, note: '' }],
+      };
+    });
+
+  // init from props + load categories
   useEffect(() => {
+    if (!visible) return;
+
+    // populate form
+    const steps: RecipeStepInput[] = (
+      initial?.recipe_steps?.length
+        ? initial?.recipe_steps
+        : [{ step_no: 1, content: '', image_url: null }]
+    ) as RecipeStepInput[];
+
+    const ings: IngredientInput[] = (
+      initial?.dish_ingredients?.length
+        ? initial?.dish_ingredients
+        : [{ ingredient: '', amount: null, note: '' }]
+    ) as IngredientInput[];
+
     setForm({
       title: initial?.title ?? '',
+      slug: initial?.slug ?? '', // hidden, sẽ auto gen khi submit
       summary: initial?.summary ?? '',
-      cover: initial?.cover ?? '',
+      cover_image_url: initial?.cover_image_url ?? '',
       category_id: initial?.category_id ?? '',
       servings: initial?.servings ?? null,
       time_minutes: initial?.time_minutes ?? null,
       diet: (initial?.diet as Diet | null) ?? null,
+      tips: initial?.tips ?? '',
       published: initial?.published ?? false,
+      recipe_steps: steps
+        .map((s, i) => ({
+          step_no: s?.step_no ?? i + 1,
+          content: s?.content ?? '',
+          image_url: s?.image_url ?? null,
+        }))
+        .sort((a, b) => (a.step_no ?? 0) - (b.step_no ?? 0))
+        .map((s, i) => ({ ...s, step_no: i + 1 })),
+      dish_ingredients: ings.map((g) => ({
+        ingredient: g?.ingredient ?? '',
+        amount: g?.amount ?? null,
+        note: g?.note ?? '',
+      })),
     });
+
+    // load categories
+    (async () => {
+      try {
+        setCatLoading(true);
+        const { data, error } = await supabaseNative
+          .from('categories')
+          .select('id, name, slug')
+          .order('name', { ascending: true });
+        if (error) throw error;
+        setCats(data ?? []);
+      } catch (e) {
+        console.error('Load categories failed:', e);
+      } finally {
+        setCatLoading(false);
+      }
+    })();
   }, [initial, visible, mode]);
 
+  // validation
   const canSubmit = useMemo(() => {
     if (!form.title?.trim()) return false;
     if (form.servings != null && form.servings < 0) return false;
     if (form.time_minutes != null && form.time_minutes < 0) return false;
+    if (!form.recipe_steps.some((s) => s.content.trim().length > 0))
+      return false;
+    for (const g of form.dish_ingredients) {
+      if (g.ingredient.trim() && g.amount != null && g.amount < 0) return false;
+    }
     return true;
   }, [form]);
 
-  const update = <K extends keyof RecipeForm>(k: K, v: RecipeForm[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
-
+  // submit
   const handleSubmit = async () => {
     if (!canSubmit || loading) return;
     try {
       setLoading(true);
-      await onSubmit({
+
+      // Auto slug từ title (ẩn UI)
+      const autoSlug = slugifyVI(form.title || '');
+
+      const payload: RecipeForm = {
         ...form,
         title: form.title.trim(),
-        summary: form.summary?.trim(),
-        cover: form.cover?.trim(),
-        category_id: form.category_id?.trim(),
-      });
+        slug: autoSlug || undefined, // ⬅️ nếu muốn server tự sinh, có thể xóa dòng này
+        summary: form.summary?.trim() || null,
+        cover_image_url: form.cover_image_url?.trim() || null,
+        category_id: form.category_id?.trim() || undefined,
+        tips: form.tips?.trim() || null,
+        recipe_steps: form.recipe_steps
+          .map((s, i) => ({
+            step_no: i + 1,
+            content: s.content.trim(),
+            image_url: s.image_url?.trim?.() || null,
+          }))
+          .filter((s) => s.content.length > 0),
+        dish_ingredients: form.dish_ingredients
+          .map((g) => ({
+            ingredient: g.ingredient.trim(),
+            amount:
+              g.amount === null || g.amount === undefined
+                ? null
+                : Number(g.amount),
+            note: g.note?.trim() || null,
+          }))
+          .filter(
+            (g) =>
+              g.ingredient.length > 0 ||
+              g.amount !== null ||
+              (g.note && g.note.length > 0),
+          ),
+      };
+
+      await onSubmit(payload);
       onClose();
     } catch (e: any) {
       console.error(e);
@@ -120,6 +417,7 @@ export function RecipeCrudModal({
     }
   };
 
+  // render
   return (
     <Modal
       visible={visible}
@@ -132,13 +430,15 @@ export function RecipeCrudModal({
         style={styles.overlay}
       >
         <View style={styles.sheet}>
-          {/* Decorative top bar */}
           <View style={styles.handleBar} />
 
           <View style={styles.headerRow}>
             <View>
               <Text style={styles.headerLabel}>Recipe Manager</Text>
-              <Text style={styles.header}>{header}</Text>
+              <Text style={styles.header}>
+                {titleText ??
+                  (mode === 'create' ? 'Create Recipe' : 'Edit Recipe')}
+              </Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Feather name="x" size={20} color="#6b7280" />
@@ -149,93 +449,53 @@ export function RecipeCrudModal({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Feather name="edit-3" size={12} color="#16a34a" /> Title *
-              </Text>
-              <View style={[styles.inputWrapper, styles.inputFocusable]}>
-                <TextInput
-                  value={form.title}
-                  onChangeText={(t) => update('title', t)}
-                  placeholder="e.g. Grilled Salmon with Herbs"
-                  placeholderTextColor="#9ca3af"
-                  style={styles.input}
-                />
-              </View>
-            </View>
+            {/* Food name (title) */}
+            <FieldGroup labelIcon="edit-3" label="Food name *">
+              <Input
+                value={form.title}
+                onChangeText={(t) => update('title', t)}
+                placeholder="Sụn gà chiên"
+              />
+            </FieldGroup>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Feather name="file-text" size={12} color="#16a34a" /> Summary
-              </Text>
-              <View style={[styles.inputWrapper, styles.textareaWrapper]}>
-                <TextInput
-                  value={form.summary ?? ''}
-                  onChangeText={(t) => update('summary', t)}
-                  placeholder="A brief description of your delicious creation..."
-                  placeholderTextColor="#9ca3af"
-                  style={[styles.input, styles.textarea]}
-                  multiline
-                />
+            {/* Cover Image URL + Preview */}
+            <FieldGroup labelIcon="image" label="Cover Image URL">
+              <Input
+                value={form.cover_image_url ?? ''}
+                onChangeText={(t) => update('cover_image_url', t)}
+                placeholder="https://example.com/image.jpg"
+                autoCapitalize="none"
+              />
+              <View style={{ marginTop: 10 }}>
+                <ImagePreview uri={form.cover_image_url} height={180} />
               </View>
-            </View>
+            </FieldGroup>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Feather name="image" size={12} color="#16a34a" /> Cover Image
-              </Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  value={form.cover ?? ''}
-                  onChangeText={(t) => update('cover', t)}
-                  placeholder="https://example.com/image.jpg"
-                  placeholderTextColor="#9ca3af"
-                  style={styles.input}
-                  autoCapitalize="none"
-                />
-              </View>
-            </View>
+            {/* Category */}
+            <FieldGroup labelIcon="tag" label="Category">
+              <CategorySelect
+                value={form.category_id ?? undefined}
+                onChange={(id) => update('category_id', id)}
+              />
+            </FieldGroup>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Feather name="tag" size={12} color="#16a34a" /> Category
-              </Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  value={form.category_id ?? ''}
-                  onChangeText={(t) => update('category_id', t)}
-                  placeholder="Category ID"
-                  placeholderTextColor="#9ca3af"
-                  style={styles.input}
-                  autoCapitalize="none"
-                />
-              </View>
-            </View>
-
+            {/* Servings + Time */}
             <View style={styles.row}>
               <View style={[styles.col, { marginRight: 8 }]}>
-                <Text style={styles.label}>
-                  <Feather name="users" size={12} color="#16a34a" /> Servings
-                </Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
+                <FieldGroup labelIcon="users" label="Servings">
+                  <Input
                     value={form.servings != null ? String(form.servings) : ''}
                     onChangeText={(t) =>
                       update('servings', t ? Number(t) : null)
                     }
-                    placeholder="4"
-                    placeholderTextColor="#9ca3af"
-                    style={styles.input}
+                    placeholder="5"
                     keyboardType="number-pad"
                   />
-                </View>
+                </FieldGroup>
               </View>
               <View style={[styles.col, { marginLeft: 8 }]}>
-                <Text style={styles.label}>
-                  <Feather name="clock" size={12} color="#16a34a" /> Time (min)
-                </Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
+                <FieldGroup labelIcon="clock" label="Time (min)">
+                  <Input
                     value={
                       form.time_minutes != null ? String(form.time_minutes) : ''
                     }
@@ -243,19 +503,14 @@ export function RecipeCrudModal({
                       update('time_minutes', t ? Number(t) : null)
                     }
                     placeholder="30"
-                    placeholderTextColor="#9ca3af"
-                    style={styles.input}
                     keyboardType="number-pad"
                   />
-                </View>
+                </FieldGroup>
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Feather name="heart" size={12} color="#16a34a" /> Diet
-                Preference
-              </Text>
+            {/* Diet */}
+            <FieldGroup labelIcon="heart" label="Diet Preference">
               <View style={styles.pillRow}>
                 {(['veg', 'nonveg'] as Diet[]).map((d) => (
                   <TouchableOpacity
@@ -280,8 +535,18 @@ export function RecipeCrudModal({
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
+            </FieldGroup>
 
+            {/* Tips */}
+            <FieldGroup labelIcon="info" label="Tips">
+              <Input
+                value={form.tips ?? ''}
+                onChangeText={(t) => update('tips', t)}
+                placeholder="Ướp 20 phút, chiên 30s"
+              />
+            </FieldGroup>
+
+            {/* Publish */}
             <View style={styles.publishCard}>
               <View style={styles.publishIcon}>
                 <Feather name="globe" size={20} color="#16a34a" />
@@ -297,6 +562,101 @@ export function RecipeCrudModal({
                 thumbColor={form.published ? '#16a34a' : '#f3f4f6'}
               />
             </View>
+
+            {/* ===== Ingredients Editor ===== */}
+            <SectionTitle icon="list" text="Ingredients" />
+            {form.dish_ingredients.map((g, idx) => (
+              <View key={idx} style={styles.cardRow}>
+                <View style={[styles.col, { flex: 1.4, marginRight: 8 }]}>
+                  <SmallLabel>Ingredient</SmallLabel>
+                  <Input
+                    value={g.ingredient}
+                    onChangeText={(t) => setIng(idx, { ingredient: t })}
+                    placeholder="Sụn gà"
+                  />
+                </View>
+                <View style={[styles.col, { flex: 0.9, marginHorizontal: 8 }]}>
+                  <SmallLabel>Amount</SmallLabel>
+                  <Input
+                    value={g.amount != null ? String(g.amount) : ''}
+                    onChangeText={(t) =>
+                      setIng(idx, {
+                        amount: t ? Number(t.replace(',', '.')) : null,
+                      })
+                    }
+                    placeholder="500"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <View style={[styles.col, { flex: 1.1, marginLeft: 8 }]}>
+                  <SmallLabel>Unit/Note</SmallLabel>
+                  <Input
+                    value={g.note ?? ''}
+                    onChangeText={(t) => setIng(idx, { note: t })}
+                    placeholder="g / tbsp / tsp / chiên ngập..."
+                  />
+                </View>
+                <View style={{ justifyContent: 'center', marginLeft: 6 }}>
+                  <IconButton
+                    icon="trash-2"
+                    color="#dc2626"
+                    onPress={() => removeIng(idx)}
+                  />
+                </View>
+              </View>
+            ))}
+            <AddButton label="Add Ingredient" onPress={addIng} />
+
+            {/* ===== Steps Editor ===== */}
+            <SectionTitle icon="hash" text="Steps" />
+            {form.recipe_steps.map((s, idx) => (
+              <View key={idx} style={styles.stepCard}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text style={styles.stepBadge}>Step {idx + 1}</Text>
+                  <View style={{ flexDirection: 'row', marginLeft: 'auto' }}>
+                    <IconButton
+                      icon="arrow-up"
+                      onPress={() => moveStep(idx, -1)}
+                    />
+                    <IconButton
+                      icon="arrow-down"
+                      onPress={() => moveStep(idx, +1)}
+                    />
+                    <IconButton
+                      icon="trash-2"
+                      color="#dc2626"
+                      onPress={() => removeStep(idx)}
+                    />
+                  </View>
+                </View>
+                <SmallLabel>Content</SmallLabel>
+                <Input
+                  multiline
+                  value={s.content}
+                  onChangeText={(t) => setStep(idx, { content: t })}
+                  placeholder="Ướp sụn gà với nước mắm, tỏi băm, tiêu 20 phút."
+                />
+                <SmallLabel style={{ marginTop: 10 }}>
+                  Image URL (optional)
+                </SmallLabel>
+                <Input
+                  value={s.image_url ?? ''}
+                  onChangeText={(t) => setStep(idx, { image_url: t })}
+                  placeholder="https://example.com/step.jpg"
+                  autoCapitalize="none"
+                />
+                <View style={{ marginTop: 10 }}>
+                  <ImagePreview uri={s.image_url} height={140} />
+                </View>
+              </View>
+            ))}
+            <AddButton label="Add Step" onPress={addStep} />
           </ScrollView>
 
           <View style={styles.footer}>
@@ -356,6 +716,7 @@ export function RecipeCrudModal({
   );
 }
 
+/* ================== styles ================== */
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -390,6 +751,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
+    borderTopColor: '#f0fdf4',
     borderBottomColor: '#f0fdf4',
   },
   headerLabel: {
@@ -399,12 +761,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  header: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#111827',
-    marginTop: 4,
-  },
+  header: { fontSize: 24, fontWeight: '800', color: '#111827', marginTop: 4 },
   closeBtn: {
     width: 40,
     height: 40,
@@ -413,18 +770,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 10,
-  },
+
+  scrollContent: { paddingBottom: 20 },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
   inputWrapper: {
     borderWidth: 2,
     borderColor: '#e5e7eb',
@@ -433,33 +782,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 4,
   },
-  inputFocusable: {
-    borderColor: '#d1fae5',
-  },
-  textareaWrapper: {
-    paddingVertical: 12,
-  },
-  input: {
-    fontSize: 15,
-    color: '#111827',
-    paddingVertical: 12,
-  },
-  textarea: {
-    height: 90,
-    textAlignVertical: 'top',
-  },
-  row: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  col: {
-    flex: 1,
-  },
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
+  input: { fontSize: 15, color: '#111827', paddingVertical: 12 },
+  textarea: { minHeight: 90, textAlignVertical: 'top' },
+  row: { flexDirection: 'row', marginBottom: 16 },
+  col: { flex: 1 },
+
+  // diet pills
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -470,19 +799,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#fafafa',
   },
-  pillActive: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#86efac',
-  },
-  pillText: {
-    color: '#6b7280',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  pillTextActive: {
-    color: '#16a34a',
-    fontWeight: '700',
-  },
+  pillActive: { backgroundColor: '#f0fdf4', borderColor: '#86efac' },
+  pillText: { color: '#6b7280', fontSize: 14, fontWeight: '600' },
+  pillTextActive: { color: '#16a34a', fontWeight: '700' },
+
+  // publish
   publishCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -502,16 +823,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  publishTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  publishHint: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginTop: 2,
-  },
+  publishTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  publishHint: { fontSize: 13, color: '#6b7280', marginTop: 2 },
+
+  // footer
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -537,14 +852,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     gap: 10,
   },
-  disabled: {
-    opacity: 0.5,
-  },
-  primaryText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
+  disabled: { opacity: 0.5 },
+  primaryText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -556,9 +865,91 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca',
     gap: 8,
   },
-  deleteText: {
-    color: '#dc2626',
-    fontWeight: '700',
-    fontSize: 15,
+  deleteText: { color: '#dc2626', fontWeight: '700', fontSize: 15 },
+
+  // extra
+  smallLabel: { fontSize: 12, color: '#6b7280', marginBottom: 6 },
+  cardRow: {
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    padding: 12,
+    marginBottom: 10,
   },
+  addBtn: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 2,
+    borderColor: '#d1fae5',
+    marginBottom: 12,
+    gap: 6,
+  },
+  addBtnText: { color: '#16a34a', fontWeight: '700' },
+  iconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  stepCard: {
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    padding: 12,
+    marginBottom: 10,
+  },
+  stepBadge: {
+    fontWeight: '800',
+    color: '#111827',
+    backgroundColor: '#eefbf3',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+    fontSize: 12,
+  },
+
+  // category select
+  selectBtn: {
+    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectText: { color: '#111827', fontSize: 15 },
+  optionPanel: {
+    marginTop: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  optionItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  optionActive: { backgroundColor: '#f0fdf4' },
+  optionText: { color: '#111827', fontSize: 15, fontWeight: '600' },
+  optionTextActive: { color: '#16a34a' },
+  optionSlug: { color: '#9ca3af', fontWeight: '400' },
 });

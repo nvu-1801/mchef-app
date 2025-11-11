@@ -3,60 +3,132 @@
 /** —— Enums & primitives —— */
 export type ID = string;
 export type Diet = 'veg' | 'nonveg';
-export type PublishStatus = 'draft' | 'published';
+export type PublishStatus = 'draft' | 'published'; // dùng cho UI nếu muốn suy luận từ 'published' boolean
 
-/** —— Category Types —— */
-export interface CategoryBE {
-  id: ID;
+/** —— Category Types (BE & App) —— */
+export type CategoryBE = {
+  id: string;
+  icon?: string | null;
   name: string;
   slug?: string | null;
   description?: string | null;
   image_url?: string | null;
-  parent_id?: ID | null;
-  is_active?: boolean;
-  created_at?: string;
-  updated_at?: string;
-}
+  parent_id?: string | null;
+  is_active?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
 
-export interface Category {
-  id?: ID;
-  name?: string;
-  slug?: string | null;
-  description?: string | null;
-  image_url?: string | null;
-  parent_id?: ID | null;
+export type Category = {
+  id: string;
+  name: string;
+  slug?: string;
+  description?: string;
+  image_url?: string;
+  parent_id?: string;
   is_active?: boolean;
   created_at?: string;
   updated_at?: string;
-}
+};
 
 /** —— Kiểu từ Backend (raw) —— */
-export interface DishBE {
-  id: ID;
-  title?: string;
-  name?: string;
-  slug: string;
+export type DishImageBE = { image_url: string };
+
+export type RatingBE = {
+  stars: number;
+  comment?: string | null;
+  user_id?: string | null;
+  created_at?: string | null;
+};
+
+export type IngredientBE = {
+  amount?: number | null;
+  note?: string | null;
+  ingredient?: string | null;
+};
+
+export type RecipeStepBE = {
+  step_no?: number | null;
+  content?: string | null;
+  image_url?: string | null;
+};
+
+export type CreatorBE = {
+  id: string;
+  avatar_url?: string | null;
+  display_name?: string | null;
+};
+
+export type DishRatingStatsBE = {
+  rating_avg: number;
+  rating_count: number;
+};
+
+export type DishBE = {
+  id: string;
+  category_id?: string | null;
+  title?: string | null;
+  name?: string | null; // fallback
+  slug?: string | null;
   cover_image_url?: string | null;
   description?: string | null;
-  diet?: Diet | string | null;
+  diet?: Diet | null;
+  time_minutes?: number | null;
+  servings?: number | null;
+  review_status?: 'pending' | 'approved' | 'rejected' | null;
+  created_by?: string | null;
+  published?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+
+  // detail
+  tips?: string | null;
+  video_url?: string | null;
+  premium?: boolean | null;
   category?: CategoryBE | null;
+  dish_images?: DishImageBE[] | null;
+  dish_ingredients?: IngredientBE[] | null;
+  recipe_steps?: RecipeStepBE[] | null;
+  ratings?: RatingBE[] | null;
+  dish_rating_stats?: DishRatingStatsBE[] | null;
+  creator?: CreatorBE | null;
+};
+
+/** —— Kiểu "chuẩn hoá" trong app —— */
+export type Rating = RatingBE;
+export type Ingredient = IngredientBE;
+export type RecipeStep = RecipeStepBE;
+export type Creator = CreatorBE;
+
+export type Dish = {
+  id: string;
+  name: string;
+  slug: string;
+  images: string[];
+  description?: string | null;
+  diet: Diet | null;
+  category: Category | null;
   servings?: number | null;
   time_minutes?: number | null;
-  status?: PublishStatus;
-
-  // các field đồng nghĩa (khác API có thể trả cái này cái kia)
-  created_by?: ID | null;
-  creator_id?: ID | null;
-  user_id?: ID | null;
-
-  // meta/tùy chọn
+  created_by?: string | null;
   created_at?: string;
   updated_at?: string;
 
-  // đôi khi BE trả kèm
-  images?: string[];
+  // trạng thái
+  published: boolean;
+  review_status?: DishBE['review_status'];
+
+  // detail-only
   tips?: string | null;
-}
+  video_url?: string | null;
+  premium?: boolean | null;
+  ingredients?: Ingredient[] | null;
+  steps?: RecipeStep[] | null;
+  ratings?: Rating[] | null;
+  rating_avg?: number | null;
+  rating_count?: number | null;
+  creator?: Creator | null;
+};
 
 /** —— Payload gửi lên Backend —— */
 export interface DishInput {
@@ -64,30 +136,12 @@ export interface DishInput {
   description?: string;
   cover_image_url?: string;
   diet?: Diet | string;
-  category_id?: ID;
+  category_id?: string;
   servings?: number;
   time_minutes?: number;
-  ingredients?: string[];
-  instructions?: string[];
-  status?: PublishStatus; // 'draft' | 'published'
-}
-
-/** —— Kiểu "Chuẩn hoá" trong app —— */
-export interface Dish {
-  id: ID;
-  name: string;
-  slug: string;
-  images: string[];
-  description?: string | null;
-  diet?: Diet | string | null;
-  category?: Category | null;
-  servings?: number | null;
-  time_minutes?: number | null;
-  created_by?: ID | null;
-  created_at?: string;
-  updated_at?: string;
-  status?: PublishStatus;
-  published?: boolean | null; // derived from status
+  ingredients?: string[];   // text list
+  instructions?: string[];  // text list
+  status?: PublishStatus;   // nếu BE hỗ trợ, còn không có thì có thể bỏ
 }
 
 /** —— Kiểu cho UI Card/List —— */
@@ -137,14 +191,16 @@ export function unwrapList<T = unknown>(
 
 export function unwrapOne<T = unknown>(
   resp: unknown,
-  keys: string[] = ['data', 'item'],
+  keys: string[] = ['data', 'item', 'record'],
 ): T | null {
   if (!resp) return null;
   if (Array.isArray(resp)) return (resp[0] as T) ?? null;
   if (typeof resp === 'object') {
     const anyResp = resp as any;
     for (const k of keys) {
-      if (anyResp[k]) return anyResp[k] as T;
+      if (anyResp[k] && typeof anyResp[k] === 'object' && !Array.isArray(anyResp[k])) {
+        return anyResp[k] as T;
+      }
     }
     return anyResp as T;
   }
@@ -172,7 +228,8 @@ export const formatRelativeTime = (
 };
 
 /** —— Mappers —— */
-export function mapCategory(c: CategoryBE): Category {
+export function mapCategory(c: CategoryBE | null | undefined): Category | null {
+  if (!c) return null;
   return {
     id: c.id,
     name: c.name,
@@ -186,43 +243,71 @@ export function mapCategory(c: CategoryBE): Category {
   };
 }
 
+function collectImages(
+  d: DishBE,
+  opts?: { supabaseUrl?: string; assetBase?: string },
+): string[] {
+  const cover = d.cover_image_url
+    ? toFullUrl(d.cover_image_url, opts?.supabaseUrl, opts?.assetBase)
+    : '';
+
+  const others = (d.dish_images ?? [])
+    .map((i) => i?.image_url)
+    .filter((u): u is string => !!u)
+    .map((u) => toFullUrl(u, opts?.supabaseUrl, opts?.assetBase));
+
+  const arr = cover ? [cover, ...others] : others;
+  return Array.from(new Set(arr));
+}
+
+/** Map từ DishBE -> Dish (chuẩn hoá, đủ dùng cho cả list/detail) */
 export function mapDishBEToDish(
   d: DishBE,
   opts?: { supabaseUrl?: string; assetBase?: string },
 ): Dish {
-  const cover = d.cover_image_url
-    ? toFullUrl(d.cover_image_url, opts?.supabaseUrl, opts?.assetBase)
-    : undefined;
-  const images = cover ? [cover] : Array.isArray(d.images) ? d.images : [];
+  const images = collectImages(d, opts);
+
+  const stats = d.dish_rating_stats?.[0];
+  const name = d.title ?? d.name ?? '';
 
   return {
     id: d.id,
-    name: d.title ?? d.name ?? '',
-    slug: d.slug,
+    name,
+    slug: d.slug ?? '', // tránh undefined
     images,
-    description: d.description ?? d.tips ?? null,
+    description: d.description ?? null,
     diet: d.diet ?? null,
-    category: d.category ? mapCategory(d.category) : null,
+    category: mapCategory(d.category),
     servings: d.servings ?? null,
     time_minutes: d.time_minutes ?? null,
-    created_by: d.created_by ?? d.creator_id ?? d.user_id ?? null,
-    created_at: d.created_at,
-    updated_at: d.updated_at,
-    status: d.status,
-    published: d.status === 'published',
+    created_by: d.created_by ?? null,
+    created_at: d.created_at ?? undefined,
+    updated_at: d.updated_at ?? undefined,
+
+    published: !!d.published,
+    review_status: d.review_status ?? undefined,
+
+    tips: d.tips ?? null,
+    video_url: d.video_url ?? null,
+    premium: d.premium ?? null,
+    ingredients: d.dish_ingredients ?? null,
+    steps: d.recipe_steps ?? null,
+    ratings: d.ratings ?? null,
+    rating_avg: stats?.rating_avg ?? (Array.isArray(d.ratings) && d.ratings.length
+      ? d.ratings.reduce((a, r) => a + (r.stars || 0), 0) / d.ratings.length
+      : null),
+    rating_count: stats?.rating_count ?? (Array.isArray(d.ratings) ? d.ratings.length : null),
+    creator: d.creator ?? null,
   };
 }
 
+/** Map Dish -> Card item cho UI list */
 export function mapDishToCard(
   d: Dish,
-  publishedFlag?: boolean,
   now: Date = new Date(),
 ): DishCard {
   const cover = d.images?.[0] ?? 'https://picsum.photos/400/300';
-
-  // nếu không có flag truyền vào, suy bằng !!d.published
-  const pub =
-    typeof publishedFlag === 'boolean' ? publishedFlag : !!d.published;
+  const pub = !!d.published;
 
   const updatedAt = pub
     ? d.created_at
@@ -234,7 +319,7 @@ export function mapDishToCard(
 
   return {
     id: d.id,
-    title: d.name,
+    title: d.name || d.slug || d.id,
     summary: d.description ?? '',
     cover,
     updatedAt,
@@ -248,7 +333,7 @@ export function mapDishToCard(
   };
 }
 
-/** —— Alias giữ tương thích tên cũ —— */
+/** —— Alias (nếu cần tương thích tên cũ) —— */
 export type RecipePayload = DishInput;
 export type Recipe = Dish;
 export type DishItem = DishCard;

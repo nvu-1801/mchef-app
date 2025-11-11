@@ -47,11 +47,18 @@ export default function SignInScreen() {
     try {
       setBusy(true);
       const sb = remember ? supabaseNative : supabaseEphemeral;
-      const { error } = await sb.auth.signInWithPassword({
-        email: email.trim(),
+      const { data, error } = await supabaseNative.auth.signInWithPassword({
+        email,
         password,
       });
-      if (error) throw error;
+      if (error) {
+        console.error('signIn error', error);
+      } else {
+        console.log(
+          'SIGNED_IN token prefix',
+          data.session?.access_token?.slice(0, 12),
+        );
+      }
       router.replace('/(main)/home');
     } catch (err: any) {
       Alert.alert('Đăng nhập thất bại', humanize(err?.message));

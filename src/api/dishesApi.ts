@@ -35,7 +35,8 @@ function unwrapList<T>(resp: unknown): T[] {
   return [];
 }
 
-function mapCategory(c: CategoryBE): Category {
+function mapCategory(c: CategoryBE | null | undefined): Category | null {
+  if (!c) return null;
   return {
     id: c.id,
     name: c.name,
@@ -49,45 +50,73 @@ function mapCategory(c: CategoryBE): Category {
   };
 }
 
-function mapDish(d: DishBE): Dish {
+function collectImages(d: DishBE): string[] {
   const cover = d.cover_image_url ?? '';
-  const images = cover ? [cover] : [];
+  const others = (d.dish_images ?? [])
+    .map(i => i?.image_url)
+    .filter((u): u is string => !!u);
+  const arr = cover ? [cover, ...others] : others;
+  // unique
+  return Array.from(new Set(arr));
+}
 
+function baseFields(d: DishBE) {
   return {
     id: d.id,
     name: d.title ?? d.name ?? '',
     slug: d.slug ?? '',
-    images,
     description: d.description ?? null,
     diet: d.diet ?? null,
-    category: d.category ? mapCategory(d.category) : null,
+    category: mapCategory(d.category),
     servings: d.servings ?? null,
     time_minutes: d.time_minutes ?? null,
     created_by: d.created_by ?? null,
     created_at: d.created_at ?? undefined,
     updated_at: d.updated_at ?? undefined,
-    status: d.status ?? 'draft',
-    published: d.status === 'published',
+    // status mapping CHUẨN theo BE
+    published: !!d.published,
+    review_status: d.review_status ?? undefined,
+  };
+}
+
+// Summary cho list (nhẹ, đủ render card)
+function mapDishSummary(d: DishBE): Dish {
+  return {
+    ...baseFields(d),
+    images: collectImages(d),
+  };
+}
+
+// Detail đầy đủ field
+function mapDishDetail(d: DishBE): Dish {
+  const stats = d.dish_rating_stats?.[0];
+  return {
+    ...baseFields(d),
+    images: collectImages(d),
+    tips: d.tips ?? null,
+    video_url: d.video_url ?? null,
+    premium: d.premium ?? null,
+    ingredients: d.dish_ingredients ?? null,
+    steps: d.recipe_steps ?? null,
+    ratings: d.ratings ?? null,
+    rating_avg: stats?.rating_avg ?? null,
+    rating_count: stats?.rating_count ?? (d.ratings?.length ?? null),
+    creator: d.creator ?? null,
   };
 }
 
 export const dishesApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
-    listDishes: b.query<Dish[], { category_id?: string; status?: string }>({
+    listDishes: b.query<Dish[], { category_id?: string; status?: string } | void>({
       query: (params) => {
-        console.log('[DishesApi] listDishes query:', params);
         const sp = new URLSearchParams();
-        if (params.category_id) sp.append('category_id', params.category_id);
-        if (params.status) sp.append('status', params.status);
-
+        if (params?.category_id) sp.append('category_id', params.category_id);
+        if (params?.status) sp.append('status', params.status);
         const qs = sp.toString();
         return { url: qs ? `/dishes?${qs}` : '/dishes' };
       },
-      transformResponse: (resp: unknown) => {
-        console.log('[DishesApi] listDishes response:', resp);
-        const list = unwrapList<DishBE>(resp);
-        return list.map(mapDish);
-      },
+      transformResponse: (resp: unknown) =>
+        unwrapList<DishBE>(resp).map(mapDishSummary),
       providesTags: (result) =>
         result
           ? [
@@ -98,63 +127,51 @@ export const dishesApi = baseApi.injectEndpoints({
     }),
 
     getDish: b.query<Dish, string>({
-      query: (id) => {
-        console.log('[DishesApi] getDish query:', id);
-        return { url: `/dishes/${id}` };
-      },
+      query: (id) => ({ url: `/dishes/${id}` }),
       transformResponse: (resp: unknown) => {
-        console.log('[DishesApi] getDish response:', resp);
         const d = unwrapOne<DishBE>(resp);
         if (!d) throw new Error('Dish not found');
-        return mapDish(d);
+        return mapDishDetail(d);
       },
       providesTags: (_r, _e, id) => [{ type: 'Dishes', id }],
     }),
 
     getHome: b.query<{ featured: Dish[]; recent: Dish[] }, void>({
-      query: () => {
-        console.log('[DishesApi] getHome query');
-        return { url: '/dishes/home' };
-      },
+      query: () => ({ url: '/dishes/home' }),
       transformResponse: (resp: unknown) => {
-        console.log('[DishesApi] getHome response:', resp);
-        if (!resp || typeof resp !== 'object') {
+        if (!resp || typeof resp !== 'object')
           return { featured: [], recent: [] };
-        }
         const obj = resp as Record<string, any>;
-        // chấp nhận nhiều khóa: featured/recent hoặc data.featured/data.recent
-        const fSrc = obj.featured ?? obj.data?.featured ?? [];
-        const rSrc = obj.recent ?? obj.data?.recent ?? [];
-        const featured = unwrapList<DishBE>(fSrc).map(mapDish);
-        const recent = unwrapList<DishBE>(rSrc).map(mapDish);
+        const featured = unwrapList<DishBE>(
+          obj.featured ?? obj.data?.featured ?? [],
+        ).map(mapDishSummary);
+        const recent = unwrapList<DishBE>(
+          obj.recent ?? obj.data?.recent ?? [],
+        ).map(mapDishSummary);
         return { featured, recent };
       },
     }),
 
-    createDish: b.mutation<Dish, DishInput>({
-      query: (body) => {
-        console.log('[DishesApi] createDish query:', body);
-        return { url: '/dishes', method: 'POST', body };
-      },
+    createDish: b.mutation<Dish, any>({
+      query: (body) => ({ url: '/dishes', method: 'POST', body }),
       transformResponse: (resp: unknown) => {
-        console.log('[DishesApi] createDish response:', resp);
         const d = unwrapOne<DishBE>(resp);
         if (!d) throw new Error('Failed to create dish');
-        return mapDish(d);
+        return mapDishDetail(d);
       },
       invalidatesTags: [{ type: 'Dishes', id: 'LIST' }],
     }),
 
-    updateDish: b.mutation<Dish, { id: string; data: Partial<DishInput> }>({
-      query: ({ id, data }) => {
-        console.log('[DishesApi] updateDish query:', { id, data });
-        return { url: `/dishes/${id}`, method: 'PUT', body: data };
-      },
+    updateDish: b.mutation<Dish, { id: string; data: Partial<any> }>({
+      query: ({ id, data }) => ({
+        url: `/dishes/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
       transformResponse: (resp: unknown) => {
-        console.log('[DishesApi] updateDish response:', resp);
         const d = unwrapOne<DishBE>(resp);
         if (!d) throw new Error('Failed to update dish');
-        return mapDish(d);
+        return mapDishDetail(d);
       },
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Dishes', id },
@@ -163,19 +180,15 @@ export const dishesApi = baseApi.injectEndpoints({
     }),
 
     deleteDish: b.mutation<void, string>({
-      query: (id) => {
-        console.log('[DishesApi] deleteDish query:', id);
-        return { url: `/dishes/${id}`, method: 'DELETE' };
-      },
-      transformResponse: (resp: unknown) => {
-        console.log('[DishesApi] deleteDish response:', resp);
-      },
+      query: (id) => ({ url: `/dishes/${id}`, method: 'DELETE' }),
+      transformResponse: () => {},
       invalidatesTags: (_r, _e, id) => [
         { type: 'Dishes', id },
         { type: 'Dishes', id: 'LIST' },
       ],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {

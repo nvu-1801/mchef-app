@@ -17,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { Video, ResizeMode } from 'expo-av';
+import { WebView } from 'react-native-webview';
 import { useGetDishQuery } from '@/src/api/dishesApi';
 import { FavoriteButton } from '@/src/components/common/FavoriteButton';
 
@@ -44,6 +46,83 @@ function Chip({
     >
       {icon}
       <Text style={[styles.chipText, { color: c.text }]}>{label}</Text>
+    </View>
+  );
+}
+
+function toYouTubeEmbed(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, '');
+    // youtu.be/<id>
+    if (host === 'youtu.be') {
+      const id = u.pathname.slice(1);
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    // youtube.com/watch?v=...
+    if (host.endsWith('youtube.com')) {
+      const path = u.pathname;
+      const v = u.searchParams.get('v');
+      if (v) return `https://www.youtube.com/embed/${v}`;
+      // shorts/<id> hoặc embed/<id>
+      const parts = path.split('/').filter(Boolean);
+      const idx = parts.findIndex((p) => p === 'shorts' || p === 'embed');
+      if (idx >= 0 && parts[idx + 1]) {
+        return `https://www.youtube.com/embed/${parts[idx + 1]}`;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function VideoBlock({ url, poster }: { url: string; poster?: string }) {
+  const yt = toYouTubeEmbed(url);
+
+  if (yt) {
+    // YouTube: nhúng iframe qua WebView
+    const html = `
+      <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1" />
+      <style>html,body{margin:0;padding:0;background:#000;height:100%} .wrap{position:fixed;inset:0}</style>
+      </head><body>
+        <div class="wrap">
+          <iframe
+            width="100%" height="100%" src="${yt}"
+            title="YouTube video player" frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen>
+          </iframe>
+        </div>
+      </body></html>
+    `;
+    return (
+      <View style={styles.videoContainer}>
+        <WebView
+          source={{ html }}
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          javaScriptEnabled
+          domStorageEnabled
+          style={styles.webview}
+        />
+      </View>
+    );
+  }
+
+  // File trực tiếp (mp4/m3u8…)
+  return (
+    <View style={styles.videoContainer}>
+      <Video
+        source={{ uri: url }}
+        useNativeControls
+        resizeMode={ResizeMode.CONTAIN}
+        style={styles.video}
+        posterSource={poster ? { uri: poster } : undefined}
+        posterStyle={{ width: '100%', height: '100%' }}
+        shouldPlay={false}
+        isLooping={false}
+      />
     </View>
   );
 }
@@ -166,20 +245,26 @@ export default function DishDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: dish, isLoading, error, refetch } = useGetDishQuery(id!);
 
-  // Extract and type-guard fields from API response
-  const dishData = dish as unknown;
-  console.log(dishData)
+  const cover = dish?.images?.[0];
+  const tips = dish?.tips ?? undefined;
+  const ratings = dish?.ratings ?? [];
+  const ingredients = dish?.ingredients ?? [];
+  const steps = dish?.steps ?? [];
+  const creator = dish?.creator ?? undefined;
 
-  const tips =
-    typeof dishData === 'object' && dishData !== null && 'tips' in dishData
-      ? (dishData.tips as string | undefined)
-      : undefined;
+  const avgStars =
+    dish?.rating_avg ??
+    (ratings.length
+      ? ratings.reduce((a, r) => a + (r.stars || 0), 0) / ratings.length
+      : 0);
+
+  const dishData = dish as unknown;
+  console.log(dishData);
 
   const ratingsRaw =
     typeof dishData === 'object' && dishData !== null && 'ratings' in dishData
       ? dishData.ratings
       : undefined;
-  const ratings = isRatingArray(ratingsRaw) ? ratingsRaw : undefined;
 
   const ingredientsRaw =
     typeof dishData === 'object' &&
@@ -187,9 +272,6 @@ export default function DishDetailScreen() {
     'dish_ingredients' in dishData
       ? dishData.dish_ingredients
       : undefined;
-  const ingredients = isIngredientArray(ingredientsRaw)
-    ? ingredientsRaw
-    : undefined;
 
   const stepsRaw =
     typeof dishData === 'object' &&
@@ -197,13 +279,11 @@ export default function DishDetailScreen() {
     'recipe_steps' in dishData
       ? dishData.recipe_steps
       : undefined;
-  const steps = isRecipeStepArray(stepsRaw) ? stepsRaw : undefined;
 
   const creatorRaw =
     typeof dishData === 'object' && dishData !== null && 'creator' in dishData
       ? dishData.creator
       : undefined;
-  const creator = isCreator(creatorRaw) ? creatorRaw : undefined;
 
   // Ingredient checklist state
   const [checkedIng, setCheckedIng] = React.useState<Record<number, boolean>>(
@@ -211,12 +291,6 @@ export default function DishDetailScreen() {
   );
   const toggleIng = (idx: number) =>
     setCheckedIng((s) => ({ ...s, [idx]: !s[idx] }));
-
-  // Average rating
-  const avgStars =
-    Array.isArray(ratings) && ratings.length > 0
-      ? ratings.reduce((a, r) => a + (r.stars || 0), 0) / ratings.length
-      : 0;
 
   if (isLoading) {
     return (
@@ -240,8 +314,6 @@ export default function DishDetailScreen() {
       </View>
     );
   }
-
-  const cover = dish.images?.[0];
 
   return (
     <ScrollView
@@ -270,6 +342,17 @@ export default function DishDetailScreen() {
           style={styles.heroImage}
           resizeMode="cover"
         />
+
+        {dish.video_url ? (
+          <>
+            <SectionHeader
+              title="Video hướng dẫn"
+              icon={<Ionicons name="play-circle" size={18} color="#3730A3" />}
+            />
+            <VideoBlock url={dish.video_url} poster={cover} />
+          </>
+        ) : null}
+
         <LinearGradient
           colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.65)']}
           style={styles.heroGradient}
@@ -738,5 +821,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2563EB',
   },
+  videoContainer: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    marginBottom: 12,
+  },
+  video: { width: '100%', height: '100%' },
+  webview: { width: '100%', height: '100%', backgroundColor: '#000' },
   writeReviewBtnText: { color: '#2563EB', fontWeight: '700' },
 });

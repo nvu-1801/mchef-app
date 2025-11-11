@@ -19,7 +19,6 @@ import { Link, useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useListDishesQuery } from '@/src/api/dishesApi';
-import type { Dish } from '@/src/types/dish';
 
 const CATEGORIES = [
   { id: 'all', name: 'All', icon: 'apps', color: '#2563EB' },
@@ -33,7 +32,6 @@ export default function MainScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { data = [], isLoading, error, refetch } = useListDishesQuery({});
-  console.log(data)
   const [selectedCat, setSelectedCat] = React.useState('all');
 
   // spotlight: first 5 dishes

@@ -17,6 +17,12 @@ import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabaseNative } from '@/src/libs/supabase/supabase-native';
 import { useAuth } from '@/src/hooks/useAuth';
+import {
+  ProfileHeader,
+  StatsRow,
+  BadgesSection,
+  RecentRecipes,
+} from '@/src/components/profile';
 
 type RawMe = Record<string, unknown>;
 
@@ -247,172 +253,34 @@ export default function Profile() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        <LinearGradient
-          colors={['#e6f8f0', '#ffffff']}
-          style={styles.headerGradient}
-        >
-          <View style={styles.headerInner}>
-            <TouchableOpacity
-              onPress={() => router.push('/settings')}
-              style={styles.iconBtn}
-            >
-              <Ionicons name="settings-outline" size={20} color="#065f46" />
-            </TouchableOpacity>
+        <ProfileHeader
+          name={name}
+          avatar={avatar}
+          email={user?.email}
+          location={location}
+          role={role}
+          bio={bio}
+          skills={skills}
+          onSettings={() => router.push('/settings')}
+          onSignOut={signOut}
+          onMyRecipes={() => router.push('/(main)/myrecipe')}
+          onNew={() => router.push('/(main)/myrecipe')}
+        />
 
-            <TouchableOpacity
-              onPress={signOut}
-              style={[styles.iconBtn, { backgroundColor: '#fff0f0' }]}
-            >
-              <Feather name="log-out" size={18} color="#ef4444" />
-            </TouchableOpacity>
-          </View>
+        <StatsRow counts={counts} />
 
-          <View style={styles.profileTop}>
-            <Image source={{ uri: avatar }} style={styles.avatar} />
-            <View style={styles.titleCol}>
-              <Text style={styles.name}>{name}</Text>
-              {!!user?.email && <Text style={styles.email}>{user.email}</Text>}
-              {!!location && (
-                <View style={styles.locationRow}>
-                  <Ionicons name="location-outline" size={14} color="#6b7280" />
-                  <Text style={styles.locationText}>{location}</Text>
-                </View>
-              )}
-              {!!role && (
-                <Text style={styles.roleText}>{role.toUpperCase()}</Text>
-              )}
-            </View>
-          </View>
+        <BadgesSection
+          badges={badges}
+          onViewAll={() => router.push('/badges')}
+        />
 
-          <Text style={styles.bio} numberOfLines={3}>
-            {bio}
-          </Text>
-
-          {skills.length > 0 && (
-            <View style={styles.skillsRow}>
-              {skills.slice(0, 4).map((s) => (
-                <View key={s} style={styles.skillChip}>
-                  <Text style={styles.skillText}>{s}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>{counts.recipes ?? 0}</Text>
-              <Text style={styles.statLabel}>Recipes</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>{counts.followers ?? 0}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>{counts.saved ?? 0}</Text>
-              <Text style={styles.statLabel}>Saved</Text>
-            </View>
-          </View>
-
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              onPress={() => router.push('/(main)/myrecipe')}
-              style={styles.primaryBtn}
-            >
-              <Text style={styles.primaryBtnText}>My Recipes</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => router.push('/(main)/myrecipe')}
-              style={styles.ghostBtn}
-            >
-              <Feather name="plus" size={18} color="#065f46" />
-              <Text style={styles.ghostBtnText}>New</Text>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-
-        {badges.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Badges</Text>
-              <TouchableOpacity onPress={() => router.push('/badges')}>
-                <Text style={styles.linkText}>View all</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.badgeRow}
-            >
-              {badges.map((b) => (
-                <View key={b.id ?? b.name} style={styles.badgeCard}>
-                  <MaterialCommunityIcons
-                    name={(b.icon as any) ?? 'star'}
-                    size={26}
-                    color="#ff8a65"
-                  />
-                  <Text style={styles.badgeLabel}>{b.name}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent recipes</Text>
-            <TouchableOpacity onPress={() => router.push('/(main)/myrecipe')}>
-              <Text style={styles.linkText}>See all</Text>
-            </TouchableOpacity>
-          </View>
-
-          {recent.length === 0 ? (
-            <View style={styles.emptyRecent}>
-              <Ionicons
-                name="document-text-outline"
-                size={40}
-                color="#cbd5e1"
-              />
-              <Text style={styles.emptyTitle}>No recent recipes</Text>
-              <Text style={styles.emptySub}>
-                Create your first recipe to see it here
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={recent}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 16 }}
-              keyExtractor={(i, idx) => i.id ?? i.title ?? `recent-${idx}`}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => router.push(`/recipe/${item.id}`)}
-                  style={styles.recentCard}
-                >
-                  <Image
-                    source={{
-                      uri:
-                        item.cover_image_url ?? 'https://picsum.photos/320/220',
-                    }}
-                    style={styles.recentImage}
-                  />
-                  <View style={styles.recentBody}>
-                    <Text style={styles.recentTitle} numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                    <View style={styles.recentMeta}>
-                      <Ionicons name="time-outline" size={14} color="#6b7280" />
-                      <Text style={styles.recentTime}>
-                        {item.time_minutes ?? '-'} min
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              )}
-            />
-          )}
-        </View>
+        <RecentRecipes
+          recent={recent}
+          onPressItem={(id) => {
+            if (!id) return router.push('/(main)/myrecipe');
+            router.push(`/recipe/${id}`);
+          }}
+        />
 
         <View style={{ height: 36 }} />
       </ScrollView>

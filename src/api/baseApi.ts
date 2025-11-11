@@ -10,28 +10,56 @@ const rawBaseQuery = fetchBaseQuery({
     headers.set('Content-Type', 'application/json');
     return headers;
   },
+  // 👇 Giữ để parse được cả JSON lẫn text
+  responseHandler: async (response) => {
+    const ct = response.headers.get('content-type') || '';
+    if (ct.includes('application/json')) return response.json();
+    if (response.status === 204) return null;
+    const text = await response.text();
+    try { return JSON.parse(text); } catch { return text; }
+  },
+  // Nếu backend dùng cookie phiên thì bật:
+  // credentials: 'include',
 });
 
+// Helper: gắn Authorization header nếu có token
+async function attachAuth(args: string | FetchArgs): Promise<FetchArgs> {
+  const argsObj: FetchArgs = typeof args === 'string' ? { url: args } : args;
+  const headers = new Headers(argsObj.headers as HeadersInit);
+
+  const { data: { session }, error } = await supabaseNative.auth.getSession();
+  if (error) console.log('[baseApi] getSession error:', error);
+  const token = session?.access_token;
+
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return { ...argsObj, headers };
+}
+
 const baseQueryWithSupabase: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
-  args,
-  api,
-  extraOptions
+  args, api, extraOptions
 ) => {
   try {
-    const { data: { session } } = await supabaseNative.auth.getSession();
-    const token = session?.access_token;
+    // 1) request lần 1 (đã gắn token nếu có)
+    const req1 = await attachAuth(args);
+    let res = await rawBaseQuery(req1, api, extraOptions);
 
-    // Gắn token vào headers của request hiện tại
-    const argsObj: FetchArgs = typeof args === 'string' ? { url: args } : args;
-    const headers = new Headers(argsObj.headers as HeadersInit);
+    // 2) nếu 401 -> thử refresh token rồi bắn lại 1 lần
+    if ('error' in res && res.error && res.error.status === 401) {
+      console.log('[baseApi] 401 -> attempting refreshSession()');
+      const { data, error } = await supabaseNative.auth.refreshSession();
+      if (error) {
+        console.log('[baseApi] refreshSession error:', error);
+        return res; // vẫn trả 401
+      }
+      // có session mới -> retry
+      const req2 = await attachAuth(args);
+      res = await rawBaseQuery(req2, api, extraOptions);
+    }
 
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-
-    const nextArgs: FetchArgs = { ...argsObj, headers };
-    return await rawBaseQuery(nextArgs, api, extraOptions);
-  } catch (error) {
-    // Tuỳ bạn log
-    return { error: { status: 'CUSTOM_ERROR', data: error } as FetchBaseQueryError } as any;
+    return res;
+  } catch (err) {
+    console.log('[baseApi] EXCEPTION', err);
+    return { error: { status: 'CUSTOM_ERROR', data: err } as FetchBaseQueryError } as any;
   }
 };
 
