@@ -1,5 +1,5 @@
 // app/(main)/dishes/[id].tsx
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -81,13 +81,13 @@ function toYouTubeEmbed(url: string): string | null {
 function extractYouTubeId(url: string): string | null {
   try {
     const u = new URL(url);
-    const host = u.hostname.replace(/^www\./, "");
-    if (host === "youtu.be") return u.pathname.slice(1);
-    if (host.endsWith("youtube.com")) {
-      const v = u.searchParams.get("v");
+    const host = u.hostname.replace(/^www\./, '');
+    if (host === 'youtu.be') return u.pathname.slice(1);
+    if (host.endsWith('youtube.com')) {
+      const v = u.searchParams.get('v');
       if (v) return v;
-      const parts = u.pathname.split("/").filter(Boolean);
-      const idx = parts.findIndex((p) => p === "shorts" || p === "embed");
+      const parts = u.pathname.split('/').filter(Boolean);
+      const idx = parts.findIndex((p) => p === 'shorts' || p === 'embed');
       if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
     }
     return null;
@@ -108,7 +108,7 @@ function VideoBlock({ url, poster }: { url: string; poster?: string }) {
           height={220}
           play={playing}
           videoId={videoId}
-          onChangeState={(s: string) => setPlaying(s === "playing")}
+          onChangeState={(s: string) => setPlaying(s === 'playing')}
           webViewProps={{ allowsInlineMediaPlayback: true }}
         />
       </View>
@@ -199,31 +199,6 @@ function ActionBtn({
   );
 }
 
-type Rating = {
-  stars: number;
-  comment?: string;
-  user_id?: string;
-  created_at?: string;
-};
-
-type Ingredient = {
-  amount?: number;
-  note?: string;
-  ingredient?: string;
-};
-
-type RecipeStep = {
-  step_no?: number;
-  content?: string;
-  image_url?: string;
-};
-
-type Creator = {
-  id: string;
-  avatar_url?: string | null;
-  display_name?: string | null;
-};
-
 export default function DishDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -302,16 +277,6 @@ export default function DishDetailScreen() {
           resizeMode="cover"
         />
 
-        {dish.video_url ? (
-          <>
-            <SectionHeader
-              title="Video hướng dẫn"
-              icon={<Ionicons name="play-circle" size={18} color="#3730A3" />}
-            />
-            <VideoBlock url={dish.video_url} poster={cover} />
-          </>
-        ) : null}
-
         <LinearGradient
           colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.65)']}
           style={styles.heroGradient}
@@ -346,6 +311,16 @@ export default function DishDetailScreen() {
           </View>
         </View>
       </View>
+
+      {dish.video_url ? (
+        <>
+          <SectionHeader
+            title="Video hướng dẫn"
+            icon={<Ionicons name="play-circle" size={18} color="#3730A3" />}
+          />
+          <VideoBlock url={dish.video_url} poster={cover} />
+        </>
+      ) : null}
 
       <View style={styles.bodyPadding}>
         {/* Meta badges: time + servings + rating */}
