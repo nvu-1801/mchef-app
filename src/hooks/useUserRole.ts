@@ -1,52 +1,60 @@
 // src/hooks/useUserRole.ts
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabaseNative } from '@/src/libs/supabase/supabase-native';
 
 type Role = 'user' | 'chef' | 'admin' | null;
 
 export function useUserRole(userId?: string | null) {
+  const uid = userId ?? null;
+
   const [role, setRole] = useState<Role>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(!!uid);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
-      if (!userId) {
-        if (!cancelled) {
-          setRole(null);
-          setLoading(false);
-        }
-        return;
-      }
+    // Không có user -> reset state và thoát
+    if (!uid) {
+      setRole(null);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
 
+    setLoading(true);
+
+    (async () => {
       try {
-        setLoading(true);
         const { data, error } = await supabaseNative
           .from('profiles')
           .select('role')
-          .eq('id', userId)
+          .eq('id', uid)
           .single();
 
-        if (error) throw error;
-        if (!cancelled) {
-          setRole((data?.role as Role) ?? null);
-          setLoading(false);
-        }
-      } catch (e) {
-        if (!cancelled) {
+        if (cancelled) return;
+        if (error) {
+          // có thể log error nếu cần
           setRole(null);
-          setLoading(false);
+        } else {
+          setRole((data?.role as Role) ?? null);
         }
+      } catch {
+        if (!cancelled) setRole(null);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    }
+    })();
 
-    load();
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [uid]);
 
-  const canManage = role === 'chef' || role === 'admin';
+  const canManage = useMemo(
+    () => role === 'chef' || role === 'admin',
+    [role]
+  );
+
   return { role, canManage, loading };
 }
