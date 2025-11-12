@@ -53,7 +53,7 @@ function mapCategory(c: CategoryBE | null | undefined): Category | null {
 function collectImages(d: DishBE): string[] {
   const cover = d.cover_image_url ?? '';
   const others = (d.dish_images ?? [])
-    .map(i => i?.image_url)
+    .map((i) => i?.image_url)
     .filter((u): u is string => !!u);
   const arr = cover ? [cover, ...others] : others;
   // unique
@@ -65,6 +65,7 @@ function baseFields(d: DishBE) {
     id: d.id,
     name: d.title ?? d.name ?? '',
     slug: d.slug ?? '',
+    video_url: d.video_url ?? null,
     description: d.description ?? null,
     diet: d.diet ?? null,
     category: mapCategory(d.category),
@@ -100,14 +101,17 @@ function mapDishDetail(d: DishBE): Dish {
     steps: d.recipe_steps ?? null,
     ratings: d.ratings ?? null,
     rating_avg: stats?.rating_avg ?? null,
-    rating_count: stats?.rating_count ?? (d.ratings?.length ?? null),
+    rating_count: stats?.rating_count ?? d.ratings?.length ?? null,
     creator: d.creator ?? null,
   };
 }
 
 export const dishesApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
-    listDishes: b.query<Dish[], { category_id?: string; status?: string } | void>({
+    listDishes: b.query<
+      Dish[],
+      { category_id?: string; status?: string } | void
+    >({
       query: (params) => {
         const sp = new URLSearchParams();
         if (params?.category_id) sp.append('category_id', params.category_id);

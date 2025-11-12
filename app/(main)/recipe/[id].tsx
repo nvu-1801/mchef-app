@@ -1,5 +1,5 @@
 // app/(main)/dishes/[id].tsx
-import React from 'react';
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
+import YoutubePlayer from 'react-native-youtube-iframe';
 import { Video, ResizeMode } from 'expo-av';
 import { WebView } from 'react-native-webview';
 import { useGetDishQuery } from '@/src/api/dishesApi';
@@ -77,40 +78,44 @@ function toYouTubeEmbed(url: string): string | null {
   }
 }
 
-function VideoBlock({ url, poster }: { url: string; poster?: string }) {
-  const yt = toYouTubeEmbed(url);
+function extractYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") return u.pathname.slice(1);
+    if (host.endsWith("youtube.com")) {
+      const v = u.searchParams.get("v");
+      if (v) return v;
+      const parts = u.pathname.split("/").filter(Boolean);
+      const idx = parts.findIndex((p) => p === "shorts" || p === "embed");
+      if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
-  if (yt) {
-    // YouTube: nhúng iframe qua WebView
-    const html = `
-      <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1" />
-      <style>html,body{margin:0;padding:0;background:#000;height:100%} .wrap{position:fixed;inset:0}</style>
-      </head><body>
-        <div class="wrap">
-          <iframe
-            width="100%" height="100%" src="${yt}"
-            title="YouTube video player" frameborder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen>
-          </iframe>
-        </div>
-      </body></html>
-    `;
+function VideoBlock({ url, poster }: { url: string; poster?: string }) {
+  const [playing, setPlaying] = useState(false);
+  const videoId = extractYouTubeId(url);
+
+  // ✅ YouTube video
+  if (videoId) {
     return (
       <View style={styles.videoContainer}>
-        <WebView
-          source={{ html }}
-          allowsInlineMediaPlayback
-          mediaPlaybackRequiresUserAction={false}
-          javaScriptEnabled
-          domStorageEnabled
-          style={styles.webview}
+        <YoutubePlayer
+          height={220}
+          play={playing}
+          videoId={videoId}
+          onChangeState={(s: string) => setPlaying(s === "playing")}
+          webViewProps={{ allowsInlineMediaPlayback: true }}
         />
       </View>
     );
   }
 
-  // File trực tiếp (mp4/m3u8…)
+  // ✅ Local/MP4 video
   return (
     <View style={styles.videoContainer}>
       <Video
@@ -119,7 +124,6 @@ function VideoBlock({ url, poster }: { url: string; poster?: string }) {
         resizeMode={ResizeMode.CONTAIN}
         style={styles.video}
         posterSource={poster ? { uri: poster } : undefined}
-        posterStyle={{ width: '100%', height: '100%' }}
         shouldPlay={false}
         isLooping={false}
       />
@@ -220,31 +224,11 @@ type Creator = {
   display_name?: string | null;
 };
 
-function isRatingArray(value: unknown): value is Rating[] {
-  return (
-    Array.isArray(value) &&
-    value.every((r) => typeof r === 'object' && r !== null && 'stars' in r)
-  );
-}
-
-function isIngredientArray(value: unknown): value is Ingredient[] {
-  return Array.isArray(value);
-}
-
-function isRecipeStepArray(value: unknown): value is RecipeStep[] {
-  return Array.isArray(value);
-}
-
-function isCreator(value: unknown): value is Creator {
-  return typeof value === 'object' && value !== null && 'id' in value;
-}
-
 export default function DishDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: dish, isLoading, error, refetch } = useGetDishQuery(id!);
-
   const cover = dish?.images?.[0];
   const tips = dish?.tips ?? undefined;
   const ratings = dish?.ratings ?? [];
@@ -259,31 +243,6 @@ export default function DishDetailScreen() {
       : 0);
 
   const dishData = dish as unknown;
-  console.log(dishData);
-
-  const ratingsRaw =
-    typeof dishData === 'object' && dishData !== null && 'ratings' in dishData
-      ? dishData.ratings
-      : undefined;
-
-  const ingredientsRaw =
-    typeof dishData === 'object' &&
-    dishData !== null &&
-    'dish_ingredients' in dishData
-      ? dishData.dish_ingredients
-      : undefined;
-
-  const stepsRaw =
-    typeof dishData === 'object' &&
-    dishData !== null &&
-    'recipe_steps' in dishData
-      ? dishData.recipe_steps
-      : undefined;
-
-  const creatorRaw =
-    typeof dishData === 'object' && dishData !== null && 'creator' in dishData
-      ? dishData.creator
-      : undefined;
 
   // Ingredient checklist state
   const [checkedIng, setCheckedIng] = React.useState<Record<number, boolean>>(

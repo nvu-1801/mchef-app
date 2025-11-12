@@ -1,12 +1,10 @@
 // src/hooks/useUserRole.ts
 import { useEffect, useState } from 'react';
 import { supabaseNative } from '@/src/libs/supabase/supabase-native';
-import { useAuth } from '@/src/hooks/useAuth';
 
 type Role = 'user' | 'chef' | 'admin' | null;
 
-export function useUserRole() {
-  const { user } = useAuth();
+export function useUserRole(userId?: string | null) {
   const [role, setRole] = useState<Role>(null);
   const [loading, setLoading] = useState(true);
 
@@ -14,8 +12,7 @@ export function useUserRole() {
     let cancelled = false;
 
     async function load() {
-      // chưa có user => set mặc định rồi thoát (nhưng KHÔNG dừng hook!)
-      if (!user?.id) {
+      if (!userId) {
         if (!cancelled) {
           setRole(null);
           setLoading(false);
@@ -28,13 +25,12 @@ export function useUserRole() {
         const { data, error } = await supabaseNative
           .from('profiles')
           .select('role')
-          .eq('id', user.id)
+          .eq('id', userId)
           .single();
 
         if (error) throw error;
         if (!cancelled) {
-          const r = (data?.role as Role) ?? null;
-          setRole(r);
+          setRole((data?.role as Role) ?? null);
           setLoading(false);
         }
       } catch (e) {
@@ -46,8 +42,10 @@ export function useUserRole() {
     }
 
     load();
-    return () => { cancelled = true; };
-  }, [user?.id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const canManage = role === 'chef' || role === 'admin';
   return { role, canManage, loading };

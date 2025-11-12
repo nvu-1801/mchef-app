@@ -19,7 +19,9 @@ export function useMyDishes() {
         console.log('[useMyDishes] Error getting user:', e);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const myDishesRaw = React.useMemo(() => {
@@ -29,16 +31,16 @@ export function useMyDishes() {
 
   const drafts: DishCard[] = React.useMemo(() => {
     return myDishesRaw
-      .filter((d) => !d.published) // hoặc suy theo status khác nếu có
+      .filter((d) => !d.published)
       .slice(0, 50)
-      .map((d) => mapDishToCard(d, false));
+      .map((d) => mapDishToCard(d));
   }, [myDishesRaw]);
 
   const published: DishCard[] = React.useMemo(() => {
     return myDishesRaw
       .filter((d) => !!d.published)
       .slice(0, 50)
-      .map((d) => mapDishToCard(d, true));
+      .map((d) => mapDishToCard(d));
   }, [myDishesRaw]);
 
   return {
