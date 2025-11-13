@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -19,9 +20,11 @@ type Item = {
 export default function RecentRecipes({
   recent = [],
   onPressItem,
+  isLoading = false,
 }: {
   recent?: Item[];
   onPressItem?: (id?: string) => void;
+  isLoading?: boolean;
 }) {
   return (
     <View style={styles.section}>
@@ -32,7 +35,12 @@ export default function RecentRecipes({
         </TouchableOpacity>
       </View>
 
-      {recent.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#16a34a" />
+          <Text style={styles.loadingText}>Loading recipes...</Text>
+        </View>
+      ) : recent.length === 0 ? (
         <View style={styles.emptyRecent}>
           <Ionicons name="document-text-outline" size={40} color="#cbd5e1" />
           <Text style={styles.emptyTitle}>No recent recipes</Text>
@@ -88,6 +96,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: '#0b3b20' },
   linkText: { color: '#16a34a', fontWeight: '700' },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
+    gap: 12,
+  },
+  loadingText: { color: '#6b7280', fontSize: 14 },
   emptyRecent: {
     alignItems: 'center',
     paddingVertical: 28,

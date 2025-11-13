@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import { supabaseNative } from '@/src/libs/supabase/supabase-native';
 import type { User, Session } from '@supabase/supabase-js';
+import { clearApiKeyCache } from '@/src/api/baseApi';
+import { router } from 'expo-router';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -15,7 +17,10 @@ export function useAuth() {
       try {
         const { data } = await supabaseNative.auth.getSession();
         if (!mounted) return;
-        console.log('[useAuth] Initial session:', data.session ? 'exists' : 'null');
+        console.log(
+          '[useAuth] Initial session:',
+          data.session ? 'exists' : 'null',
+        );
         setSession(data.session);
         setUser(data.session?.user ?? null);
       } catch (e) {
@@ -25,9 +30,15 @@ export function useAuth() {
       }
     })();
 
-    const { data: { subscription } } = supabaseNative.auth.onAuthStateChange((event, sess) => {
+    const {
+      data: { subscription },
+    } = supabaseNative.auth.onAuthStateChange((event, sess) => {
       if (!mounted) return;
-      console.log('[useAuth] Auth state changed:', event, sess ? 'has session' : 'no session');
+      console.log(
+        '[useAuth] Auth state changed:',
+        event,
+        sess ? 'has session' : 'no session',
+      );
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
 
@@ -41,11 +52,18 @@ export function useAuth() {
     };
   }, []);
 
+  const signOut = async () => {
+    await supabaseNative.auth.signOut();
+    clearApiKeyCache(); // Clear cache
+    router.replace('/(auth)/sign-in');
+  };
+
   return {
     user,
     session,
     token: session?.access_token ?? null,
     loading,
     isAuthenticated: !!user,
+    signOut,
   };
 }

@@ -191,6 +191,29 @@ export const dishesApi = baseApi.injectEndpoints({
         { type: 'Dishes', id: 'LIST' },
       ],
     }),
+
+    getChefDishes: b.query<Dish[], { chefId: string; limit?: number }>({
+      query: ({ chefId, limit = 10 }) => {
+        console.log('[DishesApi] getChefDishes query:', { chefId, limit });
+        const params = new URLSearchParams();
+        params.append('created_by', chefId);
+        params.append('limit', limit.toString());
+        params.append('order', 'created_at.desc');
+        return { url: `/dishes?${params.toString()}` };
+      },
+      transformResponse: (resp: unknown) => {
+        console.log('[DishesApi] getChefDishes response:', resp);
+        const list = unwrapList<DishBE>(resp);
+        return list.map(mapDishSummary);
+      },
+      providesTags: (result, _error, { chefId }) =>
+        result
+          ? [
+              ...result.map(({ id }) => ({ type: 'Dishes' as const, id })),
+              { type: 'Dishes', id: `CHEF-${chefId}` },
+            ]
+          : [{ type: 'Dishes', id: `CHEF-${chefId}` }],
+    }),
   }),
   overrideExisting: process.env.NODE_ENV !== 'production',
 });
@@ -202,4 +225,5 @@ export const {
   useCreateDishMutation,
   useUpdateDishMutation,
   useDeleteDishMutation,
+  useGetChefDishesQuery, // Export new hook
 } = dishesApi;

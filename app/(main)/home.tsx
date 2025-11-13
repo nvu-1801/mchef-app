@@ -149,7 +149,7 @@ export default function MainScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>✨ Spotlight tuần này</Text>
-            <Link href="/(main)/dishes" asChild>
+            <Link href="/(main)/recipe/dishes" asChild>
               <TouchableOpacity>
                 <Text style={styles.linkText}>Xem tất cả</Text>
               </TouchableOpacity>
@@ -203,7 +203,7 @@ export default function MainScreen() {
                 <MaterialCommunityIcons name="leaf" size={20} color="#059669" />
                 <Text style={styles.sectionTitle}>Món chay</Text>
               </View>
-              <Link href="/(main)/dishes?diet=veg" asChild>
+              <Link href="/(main)/recipe/dishes?diet=veg" asChild>
                 <TouchableOpacity>
                   <Text style={styles.linkText}>Xem thêm</Text>
                 </TouchableOpacity>
@@ -291,7 +291,7 @@ export default function MainScreen() {
 
           {filtered.length > 6 && (
             <TouchableOpacity
-              onPress={() => router.push('/(main)/dishes')}
+              onPress={() => router.push('/(main)/recipe/dishes')}
               style={styles.showMoreBtn}
             >
               <Text style={styles.showMoreText}>Xem thêm món</Text>

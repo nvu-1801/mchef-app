@@ -80,6 +80,7 @@ export default function MainTabs() {
       <Tabs.Screen name="recipe/[id]" options={{ href: null }} />
       <Tabs.Screen name="chef/[id]" options={{ href: null }} />
       <Tabs.Screen name="chef/index" options={{ href: null }} />
+      <Tabs.Screen name="premium" options={{ href: null }} />
       <Tabs.Screen name="search" options={{ href: null }} />
     </Tabs>
   );
