@@ -12,8 +12,10 @@ export default function AuthLayout() {
   return (
     <Stack screenOptions={{ headerTitleAlign: "center" }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="sign-in" options={{ title: "Sign In" }} />
-      <Stack.Screen name="sign-up" options={{ title: "Sign Up" }} />
+      <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+      <Stack.Screen name="sign-up" options={{ headerShown: false  }} />
+      <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="onboard" options={{ headerShown: false  }} />
     </Stack>
   );
 }

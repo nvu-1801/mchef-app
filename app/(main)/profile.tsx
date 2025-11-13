@@ -1,325 +1,513 @@
-﻿import React from "react";
-import type { ComponentProps } from "react";
+﻿import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Image,
-  ScrollView,
-  TouchableOpacity,
   SafeAreaView,
-} from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
-type BadgeIcon = ComponentProps<typeof MaterialCommunityIcons>["name"];
-
-type Badge = {
-  id: string;
-  label: string;
-  icon: BadgeIcon;
-};
-
-const USER = {
-  name: "Sophia Nguyen",
-  title: "Plant-forward chef & content creator",
-  avatar:
-    "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600&h=600&fit=crop",
-  location: "Ho Chi Minh City, Vietnam",
-  bio: "On a mission to make mindful eating easy and exciting. Sharing weekly meal prep guides, plant-forward twists, and the stories behind every dish.",
-};
-
-const STATS = [
-  { id: "recipes", label: "Recipes", value: 48 },
-  { id: "followers", label: "Followers", value: "12.4k" },
-  { id: "saved", label: "Saved", value: 89 },
-];
-
-const BADGES: Badge[] = [
-  { id: "seasonal", label: "Seasonal Expert", icon: "leaf" },
-  { id: "spice", label: "Spice Master", icon: "leaf" },
-  { id: "mentor", label: "Chef Mentor", icon: "account-heart" },
-];
-
-const RECENT_RECIPES = [
-  {
-    id: "rr-1",
-    title: "Sesame Citrus Greens Bowl",
-    time: "25 min",
-    image:
-      "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=800&h=600&fit=crop",
-  },
-  {
-    id: "rr-2",
-    title: "Charred Corn Coconut Soup",
-    time: "35 min",
-    image:
-      "https://images.unsplash.com/photo-1432139509613-5c4255815697?w=800&h=600&fit=crop",
-  },
-  {
-    id: "rr-3",
-    title: "Miso Glazed Cauliflower Steak",
-    time: "30 min",
-    image:
-      "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=800&h=600&fit=crop",
-  },
-];
+  ActivityIndicator,
+  ScrollView,
+  Alert,
+  TouchableOpacity,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { supabaseNative } from '@/src/libs/supabase/supabase-native';
+import { useAuth } from '@/src/hooks/useAuth';
+import { useGetChefQuery } from '@/src/api/chefsApi';
+import { useGetChefDishesQuery } from '@/src/api/dishesApi';
+import { clearApiKeyCache } from '@/src/api/baseApi';
+import {
+  ProfileHeader,
+  StatsRow,
+  BadgesSection,
+  RecentRecipes,
+} from '@/src/components/profile';
 
 export default function Profile() {
-  return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Ionicons name="settings-outline" size={22} color="#2d9cdb" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Ionicons name="share-outline" size={22} color="#2d9cdb" />
-          </TouchableOpacity>
-        </View>
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
 
-        <View style={styles.profileCard}>
-          <Image source={{ uri: USER.avatar }} style={styles.avatar} />
-          <Text style={styles.name}>{USER.name}</Text>
-          <Text style={styles.title}>{USER.title}</Text>
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={16} color="#888" />
-            <Text style={styles.locationText}>{USER.location}</Text>
-          </View>
-          <Text style={styles.bio}>{USER.bio}</Text>
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={[styles.actionBtn, styles.primaryBtn]}>
-              <Text style={styles.primaryBtnText}>Message</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, styles.secondaryBtn]}>
-              <Text style={styles.secondaryBtnText}>Follow</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+  // Fetch chef profile
+  const {
+    data: chef,
+    isLoading,
+    error,
+  } = useGetChefQuery(user?.id ?? '', {
+    skip: !user?.id,
+  });
 
-        <View style={styles.statsCard}>
-          {STATS.map((stat, index) => (
-            <View
-              key={stat.id}
-              style={[styles.statItem, index !== STATS.length - 1 && styles.statDivider]}
-            >
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
+  // Fetch chef's recent dishes
+  const { data: chefDishes = [], isLoading: dishesLoading } =
+    useGetChefDishesQuery(
+      { chefId: user?.id ?? '', limit: 5 },
+      { skip: !user?.id },
+    );
+
+  const signOut = React.useCallback(async () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await supabaseNative.auth.signOut();
+          clearApiKeyCache();
+          router.replace('/(auth)/sign-in');
+        },
+      },
+    ]);
+  }, [router]);
+
+  // Loading state
+  if (authLoading || isLoading) {
+    return (
+      <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={['#f0fdf4', '#ffffff']}
+          style={styles.gradientBg}
+        >
+          <View style={styles.center}>
+            <View style={styles.loadingCircle}>
+              <ActivityIndicator size="large" color="#16a34a" />
             </View>
-          ))}
-        </View>
+            <Text style={styles.loadingText}>
+              {authLoading
+                ? 'Checking authentication...'
+                : 'Loading profile...'}
+            </Text>
+          </View>
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Badge cabinet</Text>
-            <TouchableOpacity>
-              <Text style={styles.linkText}>View all</Text>
+  // Not authenticated
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={['#f0fdf4', '#ffffff']}
+          style={styles.gradientBg}
+        >
+          <View style={styles.center}>
+            <LinearGradient
+              colors={['#dcfce7', '#f0fdf4']}
+              style={styles.authIcon}
+            >
+              <Feather name="lock" size={56} color="#16a34a" />
+            </LinearGradient>
+            <Text style={styles.authTitle}>Authentication Required</Text>
+            <Text style={styles.authHint}>
+              Sign in to view and manage{'\n'}your chef profile
+            </Text>
+            <TouchableOpacity
+              style={styles.loginBtn}
+              onPress={() => router.push('/(auth)/sign-in')}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#16a34a', '#15803d']}
+                style={styles.loginGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Feather name="log-in" size={20} color="#fff" />
+                <Text style={styles.loginText}>Sign In</Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.badgeRow}
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={['#fef2f2', '#ffffff']}
+          style={styles.gradientBg}
+        >
+          <View style={styles.center}>
+            <View style={styles.errorIcon}>
+              <Feather name="alert-circle" size={56} color="#ef4444" />
+            </View>
+            <Text style={styles.errorTitle}>Failed to Load Profile</Text>
+            <Text style={styles.errorHint}>
+              Something went wrong.{'\n'}Please try again later.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="refresh" size={20} color="#16a34a" />
+              <Text style={styles.retryText}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
+  // Extract data
+  const name = chef?.displayName ?? user?.email?.split('@')[0] ?? 'Chef';
+  const avatar =
+    chef?.avatarUrl ??
+    'https://i.pinimg.com/1200x/f5/51/48/f55148ad2ef92de8597008b60bcd29a8.jpg';
+  const bio = chef?.bio ?? 'No bio yet.';
+  const role = chef?.verifiedAt ? 'Verified Chef' : 'Chef';
+
+  const counts = {
+    recipes: chefDishes.length,
+    followers: chef?.totalRatings ?? 0,
+    saved: 0,
+  };
+
+  const badges = chef?.verifiedAt
+    ? [{ id: 'verified', name: 'Verified', icon: 'shield-check' }]
+    : [];
+
+  const recent = chefDishes.map((dish) => ({
+    id: dish.id,
+    title: dish.name,
+    time_minutes: dish.time_minutes ?? undefined,
+    cover_image_url: dish.images?.[0],
+  }));
+
+  const skills: string[] = [];
+
+  return (
+    <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        <ProfileHeader
+          name={name}
+          avatar={avatar}
+          email={user?.email}
+          location=""
+          role={role}
+          bio={bio}
+          skills={skills}
+          onSettings={() => router.push('/settings')}
+          onSignOut={signOut}
+          onMyRecipes={() => router.push('/(main)/myrecipe')}
+          onNew={() => router.push('/(main)/myrecipe')}
+        />
+
+        <StatsRow counts={counts} />
+
+        <BadgesSection
+          badges={badges}
+          onViewAll={() => router.push('/badges')}
+        />
+
+        {/* Upgrade to Premium button */}
+        <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.push('/(main)/premium')}
+            style={styles.upgradeBtn}
           >
-            {BADGES.map((badge) => (
-              <View key={badge.id} style={styles.badgeCard}>
-                <MaterialCommunityIcons name={badge.icon} size={26} color="#ff7a59" />
-                <Text style={styles.badgeLabel}>{badge.label}</Text>
-              </View>
-            ))}
-          </ScrollView>
+            <LinearGradient
+              colors={['#f59e0b', '#ef4444']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.upgradeGradient}
+            >
+              <Ionicons name="sparkles" size={18} color="#fff" />
+              <Text style={styles.upgradeText}>Nâng cấp Premium</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent recipes</Text>
-            <TouchableOpacity>
-              <Text style={styles.linkText}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          {RECENT_RECIPES.map((recipe) => (
-            <TouchableOpacity key={recipe.id} style={styles.recipeCard}>
-              <Image source={{ uri: recipe.image }} style={styles.recipeImage} />
-              <View style={styles.recipeBody}>
-                <Text style={styles.recipeTitle}>{recipe.title}</Text>
-                <View style={styles.recipeMeta}>
-                  <Ionicons name="time-outline" size={16} color="#999" />
-                  <Text style={styles.recipeTime}>{recipe.time}</Text>
-                </View>
-              </View>
-              <TouchableOpacity style={styles.bookmarkBtn}>
-                <Ionicons name="bookmark-outline" size={22} color="#2d9cdb" />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Community</Text>
-          </View>
-          <View style={styles.communityCard}>
-            <View style={styles.communityRow}>
-              <Ionicons name="people-outline" size={22} color="#2ecc71" />
-              <View style={styles.communityCopy}>
-                <Text style={styles.communityTitle}>Weekend cook-along</Text>
-                <Text style={styles.communitySubtitle}>
-                  Join Sophia live this Saturday for a seasonal menu workshop.
+        {/* Ratings Section */}
+        {chef && chef.ratings.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.titleRow}>
+                <Ionicons name="star" size={20} color="#fbbf24" />
+                <Text style={styles.sectionTitle}>
+                  Reviews ({chef.averageRating?.toFixed(1)})
                 </Text>
               </View>
+              <TouchableOpacity style={styles.viewAllBtn}>
+                <Text style={styles.viewAllText}>View all</Text>
+                <Ionicons name="chevron-forward" size={16} color="#16a34a" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.communityBtn}>
-              <Text style={styles.communityBtnText}>Reserve a spot</Text>
-            </TouchableOpacity>
+
+            {chef.ratings.slice(0, 3).map((rating, index) => (
+              <View key={rating.id} style={styles.ratingCard}>
+                <LinearGradient
+                  colors={['#ffffff', '#fafafa']}
+                  style={styles.ratingGradient}
+                >
+                  <View style={styles.ratingHeader}>
+                    <View style={styles.starsContainer}>
+                      {[...Array(5)].map((_, i) => (
+                        <Ionicons
+                          key={i}
+                          name={i < rating.stars ? 'star' : 'star-outline'}
+                          size={16}
+                          color={i < rating.stars ? '#fbbf24' : '#d1d5db'}
+                        />
+                      ))}
+                    </View>
+                    <Text style={styles.ratingDate}>
+                      {new Date(rating.createdAt).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </Text>
+                  </View>
+                  {rating.comment && (
+                    <Text style={styles.ratingComment} numberOfLines={3}>
+                      "{rating.comment}"
+                    </Text>
+                  )}
+                </LinearGradient>
+              </View>
+            ))}
           </View>
-        </View>
+        )}
+
+        <RecentRecipes
+          recent={recent}
+          isLoading={dishesLoading}
+          onPressItem={(id) => {
+            if (!id) return router.push('/(main)/myrecipe');
+            router.push(`/recipe/${id}`);
+          }}
+        />
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f5f7fa" },
-  container: { paddingBottom: 40 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    paddingHorizontal: 18,
-    paddingTop: 8,
-  },
-  iconBtn: {
-    padding: 8,
-    marginLeft: 8,
-    backgroundColor: "#e6f3fb",
-    borderRadius: 12,
-  },
-  profileCard: {
-    marginHorizontal: 18,
-    marginTop: 12,
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 20,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  avatar: { width: 96, height: 96, borderRadius: 48 },
-  name: { marginTop: 12, fontSize: 22, fontWeight: "700", color: "#2c2c2c" },
-  title: { marginTop: 6, fontSize: 14, color: "#666", textAlign: "center" },
-  locationRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
-  locationText: { marginLeft: 4, color: "#888" },
-  bio: {
-    marginTop: 12,
-    color: "#525252",
-    lineHeight: 20,
-    textAlign: "center",
-  },
-  actionRow: {
-    flexDirection: "row",
-    marginTop: 18,
-  },
-  actionBtn: {
+  safe: { flex: 1, backgroundColor: '#f9fafb' },
+  gradientBg: { flex: 1 },
+  container: { paddingBottom: 20 },
+
+  // Center content
+  center: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginHorizontal: 6,
-    alignItems: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
   },
-  primaryBtn: { backgroundColor: "#2d9cdb" },
-  primaryBtnText: { color: "#fff", fontWeight: "600" },
-  secondaryBtn: { backgroundColor: "#f0f4f8" },
-  secondaryBtnText: { color: "#2d9cdb", fontWeight: "600" },
-  statsCard: {
-    flexDirection: "row",
-    marginHorizontal: 18,
-    marginTop: 18,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+
+  // Loading
+  loadingCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(22, 163, 74, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
-  statItem: { flex: 1, alignItems: "center" },
-  statDivider: {
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: "#e3e8ee",
+  loadingText: {
+    marginTop: 12,
+    color: '#6b7280',
+    fontSize: 15,
+    fontWeight: '600',
   },
-  statValue: { fontSize: 18, fontWeight: "700", color: "#2c2c2c" },
-  statLabel: { marginTop: 4, color: "#888", fontSize: 12 },
-  section: { marginTop: 24 },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 18,
+
+  // Auth styles
+  authIcon: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  authTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#111827',
     marginBottom: 12,
+    letterSpacing: -0.5,
   },
-  sectionTitle: { fontSize: 18, fontWeight: "700", color: "#2c2c2c" },
-  linkText: { color: "#2d9cdb", fontWeight: "600" },
-  badgeRow: { paddingHorizontal: 18 },
-  badgeCard: {
-    width: 120,
-    height: 100,
-    backgroundColor: "#fff",
+  authHint: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  loginBtn: {
+    width: '100%',
+    maxWidth: 280,
     borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    overflow: 'hidden',
+    shadowColor: '#16a34a',
     shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  badgeLabel: { marginTop: 8, color: "#555", fontWeight: "600", textAlign: "center" },
-  recipeCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    marginHorizontal: 18,
-    marginBottom: 12,
-    borderRadius: 16,
-    padding: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
-  recipeImage: { width: 72, height: 72, borderRadius: 12, marginRight: 12 },
-  recipeBody: { flex: 1 },
-  recipeTitle: { fontSize: 15, fontWeight: "700", color: "#2c2c2c" },
-  recipeMeta: { flexDirection: "row", alignItems: "center", marginTop: 6 },
-  recipeTime: { marginLeft: 6, color: "#888", fontSize: 12 },
-  bookmarkBtn: { padding: 6 },
-  communityCard: {
-    marginHorizontal: 18,
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  loginGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 10,
+  },
+  loginText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+
+  // Error styles
+  errorIcon: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: 12,
+    letterSpacing: -0.5,
+  },
+  errorHint: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 2,
+    borderColor: '#bbf7d0',
+  },
+  retryText: {
+    color: '#16a34a',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // Ratings Section
+  section: { marginTop: 20, marginBottom: 8 },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0b3b20',
+    letterSpacing: -0.3,
+  },
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: '#f0fdf4',
+  },
+  viewAllText: {
+    color: '#16a34a',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  // Rating Cards
+  ratingCard: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 2,
   },
-  communityRow: { flexDirection: "row", alignItems: "center" },
-  communityCopy: { marginLeft: 12, flex: 1 },
-  communityTitle: { fontSize: 16, fontWeight: "700", color: "#2c2c2c" },
-  communitySubtitle: { marginTop: 6, color: "#666", lineHeight: 18 },
-  communityBtn: {
-    marginTop: 18,
-    alignSelf: "flex-start",
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    backgroundColor: "#2ecc71",
+  ratingGradient: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
   },
-  communityBtnText: { color: "#fff", fontWeight: "600" },
+  ratingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  ratingDate: {
+    fontSize: 13,
+    color: '#9ca3af',
+    fontWeight: '600',
+  },
+  ratingComment: {
+    color: '#374151',
+    lineHeight: 22,
+    fontSize: 15,
+    fontStyle: 'italic',
+  },
+
+  // Upgrade button
+  upgradeBtn: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 4,
+  },
+  upgradeGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  upgradeText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
 });

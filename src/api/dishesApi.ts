@@ -1,90 +1,229 @@
 // src/api/dishesApi.ts
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import { getAuthToken } from '../auth/tokenBridge';
+import { baseApi } from './baseApi';
+import type {
+  Dish,
+  DishBE,
+  DishInput,
+  Category,
+  CategoryBE,
+} from '@/src/types/dish';
 
-export type Dish = {
-  id: string;
-  name: string;
-  slug: string;
-  images: string[];
-  description?: string;
-  diet?: 'veg' | 'nonveg' | string;
-  category?: { name: string; slug: string } | null;
-  servings?: number;
-  time_minutes?: number;
-};
+// Helper functions
+function unwrapOne<T>(resp: unknown): T | null {
+  if (!resp || typeof resp !== 'object') return null;
+  const obj = resp as Record<string, any>;
 
-type DishBE = {
-  id: string;
-  title: string;
-  slug: string;
-  cover_image_url?: string;
-  description?: string;
-  diet?: string;
-  categories?: { name: string; slug: string } | null;
-  servings?: number;
-  time_minutes?: number;
-};
+  if (obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) {
+    return obj.data as T;
+  }
+  // các trường hợp thường gặp khác
+  if (obj.item && typeof obj.item === 'object') return obj.item as T;
+  if (obj.record && typeof obj.record === 'object') return obj.record as T;
+  if (!Array.isArray(obj) && obj.id) return obj as T;
+  return null;
+}
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:4000/api';
-const ASSET_BASE = process.env.EXPO_PUBLIC_ASSET_BASE ?? 'http://10.0.2.2:4000';
+function unwrapList<T>(resp: unknown): T[] {
+  if (!resp || typeof resp !== 'object') return [];
+  const obj = resp as Record<string, any>;
 
-const toFullUrl = (p?: string) => {
-  if (!p) return '';
-  if (/^https?:\/\//i.test(p)) return p;
-  return `${ASSET_BASE}/${p.replace(/^\/+/, '')}`;
-};
+  if (Array.isArray(obj.data)) return obj.data as T[];
+  if (Array.isArray(obj.items)) return obj.items as T[];
+  if (Array.isArray(obj.results)) return obj.results as T[];
+  if (Array.isArray(obj.list)) return obj.list as T[];
+  if (Array.isArray(obj)) return obj as T[];
+  return [];
+}
 
-export const dishesApi = createApi({
-  reducerPath: 'dishesApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: API_BASE,
-    prepareHeaders: (headers) => {
-      const token = getAuthToken(); // lấy từ bridge, không cần Redux state
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-      return headers;
-    },
-  }),
-  tagTypes: ['Dishes'],
+function mapCategory(c: CategoryBE | null | undefined): Category | null {
+  if (!c) return null;
+  return {
+    id: c.id,
+    name: c.name,
+    slug: c.slug ?? undefined,
+    description: c.description ?? undefined,
+    image_url: c.image_url ?? undefined,
+    parent_id: c.parent_id ?? undefined,
+    is_active: c.is_active ?? true,
+    created_at: c.created_at ?? undefined,
+    updated_at: c.updated_at ?? undefined,
+  };
+}
+
+function collectImages(d: DishBE): string[] {
+  const cover = d.cover_image_url ?? '';
+  const others = (d.dish_images ?? [])
+    .map((i) => i?.image_url)
+    .filter((u): u is string => !!u);
+  const arr = cover ? [cover, ...others] : others;
+  // unique
+  return Array.from(new Set(arr));
+}
+
+function baseFields(d: DishBE) {
+  return {
+    id: d.id,
+    name: d.title ?? d.name ?? '',
+    slug: d.slug ?? '',
+    video_url: d.video_url ?? null,
+    description: d.description ?? null,
+    diet: d.diet ?? null,
+    category: mapCategory(d.category),
+    servings: d.servings ?? null,
+    time_minutes: d.time_minutes ?? null,
+    created_by: d.created_by ?? null,
+    created_at: d.created_at ?? undefined,
+    updated_at: d.updated_at ?? undefined,
+    // status mapping CHUẨN theo BE
+    published: !!d.published,
+    review_status: d.review_status ?? undefined,
+  };
+}
+
+// Summary cho list (nhẹ, đủ render card)
+function mapDishSummary(d: DishBE): Dish {
+  return {
+    ...baseFields(d),
+    images: collectImages(d),
+  };
+}
+
+// Detail đầy đủ field
+function mapDishDetail(d: DishBE): Dish {
+  const stats = d.dish_rating_stats?.[0];
+  return {
+    ...baseFields(d),
+    images: collectImages(d),
+    tips: d.tips ?? null,
+    video_url: d.video_url ?? null,
+    premium: d.premium ?? null,
+    ingredients: d.dish_ingredients ?? null,
+    steps: d.recipe_steps ?? null,
+    ratings: d.ratings ?? null,
+    rating_avg: stats?.rating_avg ?? null,
+    rating_count: stats?.rating_count ?? d.ratings?.length ?? null,
+    creator: d.creator ?? null,
+  };
+}
+
+export const dishesApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
-    listDishes: b.query<Dish[], { q?: string } | void>({
-      query: (arg) =>
-        `/dishes${arg?.q ? `?q=${encodeURIComponent(arg.q)}` : ''}`,
-      transformResponse: (resp: DishBE[] | { data: DishBE[] }) => {
-        const arr = Array.isArray(resp) ? resp : (resp?.data ?? []);
-        return arr.map((d) => ({
-          id: d.id,
-          name: d.title,
-          slug: d.slug,
-          images: d.cover_image_url ? [toFullUrl(d.cover_image_url)] : [],
-          description: d.description,
-          diet: d.diet,
-          category: d.categories ?? null,
-          servings: d.servings,
-          time_minutes: d.time_minutes,
-        }));
+    listDishes: b.query<
+      Dish[],
+      { category_id?: string; status?: string } | void
+    >({
+      query: (params) => {
+        const sp = new URLSearchParams();
+        if (params?.category_id) sp.append('category_id', params.category_id);
+        if (params?.status) sp.append('status', params.status);
+        const qs = sp.toString();
+        return { url: qs ? `/dishes?${qs}` : '/dishes' };
       },
-      providesTags: ['Dishes'],
+      transformResponse: (resp: unknown) =>
+        unwrapList<DishBE>(resp).map(mapDishSummary),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ id }) => ({ type: 'Dishes' as const, id })),
+              { type: 'Dishes', id: 'LIST' },
+            ]
+          : [{ type: 'Dishes', id: 'LIST' }],
     }),
+
     getDish: b.query<Dish, string>({
-      query: (id) => `/dishes/${id}`,
-      transformResponse: (resp: DishBE | { data: DishBE }) => {
-        const d = (resp as any).data ?? (resp as DishBE);
-        return {
-          id: d.id,
-          name: d.title,
-          slug: d.slug,
-          images: d.cover_image_url ? [toFullUrl(d.cover_image_url)] : [],
-          description: d.description,
-          diet: d.diet,
-          category: d.categories ?? null,
-          servings: d.servings,
-          time_minutes: d.time_minutes,
-        };
+      query: (id) => ({ url: `/dishes/${id}` }),
+      transformResponse: (resp: unknown) => {
+        const d = unwrapOne<DishBE>(resp);
+        if (!d) throw new Error('Dish not found');
+        return mapDishDetail(d);
       },
-      providesTags: (_r, _e, id) => [{ type: 'Dishes' as const, id }],
+      providesTags: (_r, _e, id) => [{ type: 'Dishes', id }],
+    }),
+
+    getHome: b.query<{ featured: Dish[]; recent: Dish[] }, void>({
+      query: () => ({ url: '/dishes/home' }),
+      transformResponse: (resp: unknown) => {
+        if (!resp || typeof resp !== 'object')
+          return { featured: [], recent: [] };
+        const obj = resp as Record<string, any>;
+        const featured = unwrapList<DishBE>(
+          obj.featured ?? obj.data?.featured ?? [],
+        ).map(mapDishSummary);
+        const recent = unwrapList<DishBE>(
+          obj.recent ?? obj.data?.recent ?? [],
+        ).map(mapDishSummary);
+        return { featured, recent };
+      },
+    }),
+
+    createDish: b.mutation<Dish, any>({
+      query: (body) => ({ url: '/dishes', method: 'POST', body }),
+      transformResponse: (resp: unknown) => {
+        const d = unwrapOne<DishBE>(resp);
+        if (!d) throw new Error('Failed to create dish');
+        return mapDishDetail(d);
+      },
+      invalidatesTags: [{ type: 'Dishes', id: 'LIST' }],
+    }),
+
+    updateDish: b.mutation<Dish, { id: string; data: Partial<any> }>({
+      query: ({ id, data }) => ({
+        url: `/dishes/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      transformResponse: (resp: unknown) => {
+        const d = unwrapOne<DishBE>(resp);
+        if (!d) throw new Error('Failed to update dish');
+        return mapDishDetail(d);
+      },
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Dishes', id },
+        { type: 'Dishes', id: 'LIST' },
+      ],
+    }),
+
+    deleteDish: b.mutation<void, string>({
+      query: (id) => ({ url: `/dishes/${id}`, method: 'DELETE' }),
+      transformResponse: () => {},
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Dishes', id },
+        { type: 'Dishes', id: 'LIST' },
+      ],
+    }),
+
+    getChefDishes: b.query<Dish[], { chefId: string; limit?: number }>({
+      query: ({ chefId, limit = 10 }) => {
+        console.log('[DishesApi] getChefDishes query:', { chefId, limit });
+        const params = new URLSearchParams();
+        params.append('created_by', chefId);
+        params.append('limit', limit.toString());
+        params.append('order', 'created_at.desc');
+        return { url: `/dishes?${params.toString()}` };
+      },
+      transformResponse: (resp: unknown) => {
+        console.log('[DishesApi] getChefDishes response:', resp);
+        const list = unwrapList<DishBE>(resp);
+        return list.map(mapDishSummary);
+      },
+      providesTags: (result, _error, { chefId }) =>
+        result
+          ? [
+              ...result.map(({ id }) => ({ type: 'Dishes' as const, id })),
+              { type: 'Dishes', id: `CHEF-${chefId}` },
+            ]
+          : [{ type: 'Dishes', id: `CHEF-${chefId}` }],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
-export const { useListDishesQuery, useGetDishQuery } = dishesApi;
+export const {
+  useListDishesQuery,
+  useGetDishQuery,
+  useGetHomeQuery,
+  useCreateDishMutation,
+  useUpdateDishMutation,
+  useDeleteDishMutation,
+  useGetChefDishesQuery, // Export new hook
+} = dishesApi;
